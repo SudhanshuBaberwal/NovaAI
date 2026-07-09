@@ -1,25 +1,32 @@
-import express from "express"
-import dotenv from "dotenv"
-import proxy from "express-http-proxy"
-import cors from "cors"
-import cookieParser from "cookie-parser"
+import express from "express";
+import dotenv from "dotenv";
+import proxy from "express-http-proxy";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import { getCurrentUser } from "./controller/user.controller.js";
+import protect from "./middleware/auth.middleware.js";
+import ProxyWithHeader from "./utils/proxtWithHeader.js";
 
-dotenv.config()
+dotenv.config();
 
 const port = process.env.PORT;
 
-const app = express()
-app.use(cors({
-    origin:process.env.FRONTEND_URL,
-    credentials:true
-}))
-app.use(cookieParser())
-app.use("/auth" , proxy(process.env.AUTH_SERVICE))
+const app = express();
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  }),
+);
+app.use(cookieParser());
+app.use("/api/auth", proxy(process.env.AUTH_SERVICE));
+app.use("/api/chat", protect, ProxyWithHeader(process.env.CHAT_SERVICE));
+app.get("/api/me", protect, getCurrentUser);
 
-app.get("/" , (req , res) => {
-    return res.json({message : "Hello from Gateway"})
-})
+app.get("/", (req, res) => {
+  return res.json({ message: "Hello from Gateway" });
+});
 
 app.listen(port, () => {
-    console.log(`Gateway started at ${port}`)
-})
+  console.log(`Gateway started at ${port}`);
+});
