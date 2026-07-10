@@ -4,23 +4,27 @@ import { auth, googleProvider } from "../utils/firebase";
 import api from "../utils/axios";
 import Home from "./pages/Home";
 import getCurrentUser from "./features/getCurrentUser";
-import {useDispatch} from "react-redux"
+import { useDispatch } from "react-redux";
 import { setUserData } from "./redux/userSlice";
+import { Toaster } from "react-hot-toast";
+import { ToastProvider } from "./utils/ToastContext";
 
 const App = () => {
+  const dispatch = useDispatch();
 
-  const dispatch = useDispatch()
-  
   useEffect(() => {
     const getUser = async () => {
       const data = await getCurrentUser();
-      dispatch(setUserData(data))
+      dispatch(setUserData(data));
     };
-    getUser()
+    getUser();
   }, []);
   return (
     <>
-      <Home />
+      <Toaster />
+      <ToastProvider>
+        <Home />
+      </ToastProvider>
     </>
   );
 };
