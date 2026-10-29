@@ -11,11 +11,11 @@ const groq = new ChatGroq({
 });
 
 
-const openai = new ChatOpenAI({
-  model: "gpt-5.5",
-  temperature: 0,
-  // other params...
-})
+// const openai = new ChatOpenAI({
+//   model: "gpt-5.5",
+//   temperature: 0,
+//   // other params...
+// })
 
 const gemini = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
@@ -27,7 +27,7 @@ const gemini = new ChatGoogleGenerativeAI({
 export const getModel = async (agent) => {
   switch (agent) {
     case "chat":
-      return openai;
+      return groq;
 
     case "search":
       return groq;

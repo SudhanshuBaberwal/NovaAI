@@ -3,7 +3,7 @@ import { getModel } from "../models/LLMmodels.js"
 export const chatAgent = async (state) => {
     const llm= await getModel("chat")
     const systemPrompt = `You are NovaAI, an intelligent AI assistant`
-    const result = (await llm).invoke([
+    const result = await llm.invoke([
         {
             "role":"system",
             "content":systemPrompt
@@ -16,6 +16,6 @@ export const chatAgent = async (state) => {
 
     return {
         ...state,
-        aiResponse:result
+        aiResponse:result.content
     }
 }
