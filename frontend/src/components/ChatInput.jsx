@@ -1,29 +1,51 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Paperclip, Globe, Mic } from 'lucide-react';
+import React, { useState, useRef, useEffect } from "react";
+import { ArrowUp, Paperclip, Globe, Mic } from "lucide-react";
+import { useSelector } from "react-redux";
+import sendMessage from "../features/sendMessage";
 
-const ChatInput = ({ onSendMessage }) => {
-  const [input, setInput] = useState('');
+const ChatInput = () => {
+  const [input, setInput] = useState("");
   const [isWebSearch, setIsWebSearch] = useState(false);
   const textareaRef = useRef(null);
 
+  const { selectedConversation } = useSelector((state) => state.conversation);
   // Auto-resize textarea height as content grows
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
     }
   }, [input]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e?.preventDefault();
-    if (!input.trim()) return;
-    if (onSendMessage) onSendMessage(input);
-    setInput('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    const message = input.trim();
+    if (!message) return;
+    try {
+      const conversationId = selectedConversation?._id;
+      if (!conversationId) {
+        console.error(
+          "No conversation selected. Create or select a conversation first.",
+        );
+        return;
+      }
+      const payload = {
+        prompt: input.trim(),
+        conversationId,
+      };
+      const data = await sendMessage(payload);
+      console.log(data);
+      setInput("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
@@ -60,8 +82,8 @@ const ChatInput = ({ onSendMessage }) => {
               onClick={() => setIsWebSearch((prev) => !prev)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors ${
                 isWebSearch
-                  ? 'bg-zinc-100 text-black font-semibold'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  ? "bg-zinc-100 text-black font-semibold"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
               }`}
               title="Search Web"
             >
@@ -84,8 +106,8 @@ const ChatInput = ({ onSendMessage }) => {
               disabled={!input.trim()}
               className={`p-2 rounded-xl transition-all duration-150 ${
                 input.trim()
-                  ? 'bg-white text-black hover:bg-zinc-200 cursor-pointer active:scale-95'
-                  : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                  ? "bg-white text-black hover:bg-zinc-200 cursor-pointer active:scale-95"
+                  : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
               }`}
               title="Send Message"
             >

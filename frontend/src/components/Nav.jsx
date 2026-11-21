@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Menu, ChevronDown, Share2, Sparkles, SlidersHorizontal, Check } from 'lucide-react';
+import { useSelector } from 'react-redux';
 
 const Nav = ({ setIsMobileOpen }) => {
   const [model, setModel] = useState('NovaAI 4.0');
@@ -11,6 +12,9 @@ const Nav = ({ setIsMobileOpen }) => {
     { name: 'NovaAI Mini', desc: 'Lightweight & instant response model' },
   ];
 
+  const {selectedConversation} = useSelector((state) => state.conversation)
+  const {messages} = useSelector((state) => state.message)
+  
   return (
     <header className="h-14 border-b border-zinc-800 bg-black/80 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-30">
       {/* Left side: Mobile Toggle & Model Selector */}

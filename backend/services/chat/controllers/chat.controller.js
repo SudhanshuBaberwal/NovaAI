@@ -44,17 +44,30 @@ export const saveMessage = async (req, res) => {
 
 export const getMessage = async (req, res) => {
   try {
-    const {id} = req.params.conversationId
-    if (!id){
-        return res.status(404).json({success:false,message:"Cannot get ConversationID"})
+    const { conversationId } = req.params;
+
+    if (!conversationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Conversation ID is required",
+      });
     }
+
     const messages = await Message.find({
-      conversationId:id
-    }).sort({ createdAt: -1 });
-    return res.status(200).json(messages);
+      conversationId: conversationId,
+    }).sort({ createdAt: 1 });
+
+    return res.status(200).json({
+      success: true,
+      messages,
+    });
   } catch (error) {
-    console.log("Error in get message API : ", error);
-    return res.status(500).json({ success: false, message: error.message });
+    console.error("Error in getMessage API:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 

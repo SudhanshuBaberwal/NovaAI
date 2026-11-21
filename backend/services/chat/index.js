@@ -6,6 +6,8 @@ import router from "./routes/chat.route.js";
 dotenv.config();
 const port = process.env.PORT;
 const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use("/",router)
 
 app.listen(port, () => {

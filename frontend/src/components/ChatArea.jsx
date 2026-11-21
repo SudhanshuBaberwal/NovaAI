@@ -14,10 +14,11 @@ const ChatArea = ({ isMobileOpen, setIsMobileOpen }) => {
   useEffect(() => {
     const getMesg = async () => {
       if (selectedConversation) {
-        const data = await getMessages(selectedConversation._id)
+        const data = await getMessages(selectedConversation?._id)
         dispatch(setMessages(data))
       }
     }
+    getMesg()
   },[selectedConversation])
   
   return (
