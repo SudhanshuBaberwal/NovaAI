@@ -126,7 +126,7 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
         {/* New Chat Action Button */}
         <div className="p-3 shrink-0">
           <button
-            onClick={handleCreateConversation}
+            onClick={() => dispatch(setSelectedConversation(null))}
             className={`w-full flex items-center justify-center gap-2 font-medium bg-white text-black hover:bg-zinc-200 active:scale-[0.98] transition-all duration-150 rounded-lg shadow-sm ${
               collapsed ? "h-10 px-0" : "py-2.5 px-3 text-sm"
             }`}

@@ -1,10 +1,10 @@
+import redis from "../../../shared/redis/redis.js";
+import { addMessage } from "../config/memory.js";
 import graph from "../graph/graph.js";
 import axios from "axios";
 
 export const agent = async (req, res) => {
   try {
-    console.log("Request body:", req.body);
-
     if (!req.body || typeof req.body !== "object") {
       return res.status(400).json({
         success: false,
@@ -27,21 +27,35 @@ export const agent = async (req, res) => {
         message: "Conversation ID is required.",
       });
     }
-
     await axios.post(`${process.env.CHAT_SERVICE}/save-message`, {
       conversationId,
       role: "user",
-      content: prompt,
+      content: prompt.trim(),
     });
 
+    // 1. Run the agent graph using existing history before saving the new turn
     const result = await graph.invoke({
-      prompt,
+      prompt: prompt.trim(),
       conversationId,
+    });
+
+    const response = result.aiResponse;
+
+    // 2. Save both user and assistant messages to Redis with exact positional arguments
+    await addMessage(conversationId, "user", prompt.trim());
+    await addMessage(conversationId, "assistant", response);
+
+    // 3. Persist both messages to the database
+
+    await axios.post(`${process.env.CHAT_SERVICE}/save-message`, {
+      conversationId,
+      role: "assistant",
+      content: response,
     });
 
     return res.status(200).json({
       success: true,
-      response: result.aiResponse,
+      response,
     });
   } catch (error) {
     console.error("Error in agent API:", error);

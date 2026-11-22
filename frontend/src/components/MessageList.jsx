@@ -1,40 +1,25 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
-import {
-  User,
-  Sparkles,
-  Copy,
-  Check,
-  ThumbsUp,
-  ThumbsDown,
-  RotateCcw,
-  Code,
-  Lightbulb,
-  PenTool,
-  Compass,
-} from "lucide-react";
+import { Sparkles, Code, Lightbulb, PenTool, Compass } from "lucide-react";
+import MessageBubble from "./MessageBubble";
 
 const MessageList = () => {
-  const { selectedConversation } = useSelector(
-    (state) => state.conversation || {},
-  );
-  const { messages } = useSelector((state) => state.message);
+  const rawMessages = useSelector((state) => state.message?.messages);
+  const { userData } = useSelector((state) => state.user || {});
   const messagesEndRef = useRef(null);
-  const [copiedIdx, setCopiedIdx] = useState(null);
 
-  // const messages = selectedConversation?.messages || [];
+  const messages = Array.isArray(rawMessages)
+    ? rawMessages
+    : Array.isArray(rawMessages?.messages)
+      ? rawMessages.messages
+      : Array.isArray(rawMessages?.data)
+        ? rawMessages.data
+        : [];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleCopy = (text, index) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIdx(index);
-    setTimeout(() => setCopiedIdx(null), 2000);
-  };
-
-  // Welcome Screen when no messages are active
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-4 max-w-3xl mx-auto w-full text-center">
@@ -49,7 +34,6 @@ const MessageList = () => {
           with NovaAI.
         </p>
 
-        {/* Suggestion Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl text-left">
           {[
             {
@@ -101,82 +85,14 @@ const MessageList = () => {
 
   return (
     <div className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-6">
-      {Array.isArray(messages) &&
-        messages.map((msg, idx) => {
-          const isUser = msg.sender === "user";
-          return (
-            <div
-              key={idx}
-              className={`flex items-start gap-3 sm:gap-4 ${
-                isUser ? "justify-end" : "justify-start"
-              }`}
-            >
-              {/* AI Avatar */}
-              {!isUser && (
-                <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
-                  <Sparkles size={16} className="text-white" />
-                </div>
-              )}
-
-              {/* Content Box */}
-              <div
-                className={`group relative max-w-[85%] sm:max-w-[78%] ${isUser ? "order-1" : "order-2"}`}
-              >
-                <div
-                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                    isUser
-                      ? "bg-zinc-800 text-white rounded-br-none border border-zinc-700"
-                      : "bg-zinc-900/60 text-zinc-200 border border-zinc-800/80 rounded-bl-none"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                </div>
-
-                {/* AI Message Action Toolbar */}
-                {!isUser && (
-                  <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleCopy(msg.content, idx)}
-                      className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-                      title="Copy message"
-                    >
-                      {copiedIdx === idx ? (
-                        <Check size={14} className="text-emerald-400" />
-                      ) : (
-                        <Copy size={14} />
-                      )}
-                    </button>
-                    <button
-                      className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-                      title="Good response"
-                    >
-                      <ThumbsUp size={14} />
-                    </button>
-                    <button
-                      className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-                      title="Bad response"
-                    >
-                      <ThumbsDown size={14} />
-                    </button>
-                    <button
-                      className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-                      title="Regenerate"
-                    >
-                      <RotateCcw size={14} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* User Avatar */}
-              {isUser && (
-                <div className="w-8 h-8 rounded-lg bg-white text-black font-semibold flex items-center justify-center shrink-0 mt-0.5 order-2">
-                  <User size={16} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {messages.map((msg, idx) => (
+        <MessageBubble
+          key={msg._id || idx}
+          role={msg.role || msg.sender}
+          content={msg.content || msg.text || msg.message || ""}
+          userAvatar={userData?.avatar}
+        />
+      ))}
       <div ref={messagesEndRef} />
     </div>
   );

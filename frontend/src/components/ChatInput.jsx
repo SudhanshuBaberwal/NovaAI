@@ -1,15 +1,25 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ArrowUp, Paperclip, Globe, Mic } from "lucide-react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import sendMessage from "../features/sendMessage";
+import { addMessages } from "../redux/messageSlice";
+import {
+  addConversation,
+  setSelectedConversation,
+  setConvTitle,
+} from "../redux/conversationSlice";
+import { createConversation } from "../features/createConversations";
+import updateConversation from "../features/updateConversation";
 
 const ChatInput = () => {
   const [input, setInput] = useState("");
   const [isWebSearch, setIsWebSearch] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef(null);
+  const dispatch = useDispatch();
 
   const { selectedConversation } = useSelector((state) => state.conversation);
-  // Auto-resize textarea height as content grows
+
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -20,27 +30,61 @@ const ChatInput = () => {
   const handleSubmit = async (e) => {
     e?.preventDefault();
     const message = input.trim();
-    if (!message) return;
+    if (!message || isSending) return;
+
+    setIsSending(true);
     try {
-      const conversationId = selectedConversation?._id;
-      if (!conversationId) {
-        console.error(
-          "No conversation selected. Create or select a conversation first.",
-        );
-        return;
+      let conversation = selectedConversation;
+
+      // 1. Create & select a new conversation if none is active
+      if (!conversation?._id) {
+        const conv = await createConversation();
+        if (!conv?._id) {
+          console.error("Failed to create conversation.");
+          return;
+        }
+        dispatch(addConversation(conv));
+        dispatch(setSelectedConversation(conv));
+        conversation = conv;
       }
-      const payload = {
-        prompt: input.trim(),
-        conversationId,
-      };
-      const data = await sendMessage(payload);
-      console.log(data);
+
+      const conversationId = conversation._id;
+
+      // 2. Optimistically append user message & clear input immediately
+      dispatch(addMessages({ role: "user", content: message }));
       setInput("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
+
+      // 3. Rename "New Chat" using the first message
+      if (conversation.title === "New Chat") {
+        const newTitle = message.slice(0, 40);
+        try {
+          await updateConversation({ id: conversationId, title: newTitle });
+          dispatch(setConvTitle({ conversationId, title: newTitle }));
+          dispatch(
+            setSelectedConversation({ ...conversation, title: newTitle })
+          );
+        } catch (titleErr) {
+          console.error("Failed to update title:", titleErr);
+        }
+      }
+
+      // 4. Send message to backend & append assistant reply
+      const data = await sendMessage({
+        prompt: message,
+        conversationId,
+      });
+
+      const aiReply = data?.response || data?.message || data?.data;
+      if (aiReply) {
+        dispatch(addMessages({ role: "assistant", content: aiReply }));
+      }
     } catch (error) {
       console.error("Failed to send message:", error);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -68,7 +112,6 @@ const ChatInput = () => {
         />
 
         <div className="flex items-center justify-between pt-2 px-1">
-          {/* Left Controls */}
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -92,7 +135,6 @@ const ChatInput = () => {
             </button>
           </div>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -103,9 +145,9 @@ const ChatInput = () => {
             </button>
             <button
               type="submit"
-              disabled={!input.trim()}
+              disabled={!input.trim() || isSending}
               className={`p-2 rounded-xl transition-all duration-150 ${
-                input.trim()
+                input.trim() && !isSending
                   ? "bg-white text-black hover:bg-zinc-200 cursor-pointer active:scale-95"
                   : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
               }`}
