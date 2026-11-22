@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   User,
   Sparkles,
@@ -7,13 +7,119 @@ import {
   ThumbsUp,
   ThumbsDown,
   RotateCcw,
+  X,
+  Maximize2,
+  ExternalLink,
+  ArrowUpRight,
 } from "lucide-react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
-const MessageBubble = ({ role, content, userAvatar, onRegenerate }) => {
+// Repairs collapsed single-line Markdown tables (e.g. "| Col1 | Col2 | |---|---| | Val1 | Val2 |")
+const normalizeMarkdown = (text) => {
+  if (!text || typeof text !== "string") return "";
+  return text.replace(/\|\s+\|(?=\s*[-:]+|\s*[A-Za-z0-9*"'`])/g, "|\n|");
+};
+
+const CodeBlock = ({ language, children }) => {
+  const [copiedCode, setCopiedCode] = useState(false);
+  const codeText = String(children).replace(/\n$/, "");
+  const normalizedLang = language ? language.toLowerCase() : "text";
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(codeText);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  return (
+    <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-md">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-zinc-900/90 border-b border-zinc-800 text-[11px] font-mono text-zinc-400">
+        <span className="uppercase tracking-wider">
+          {language || "code"}
+        </span>
+        <button
+          type="button"
+          onClick={handleCopyCode}
+          className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+        >
+          {copiedCode ? (
+            <>
+              <Check size={12} className="text-white" />
+              <span className="text-white">Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="overflow-x-auto font-mono text-xs leading-relaxed scrollbar-none">
+        <SyntaxHighlighter
+          language={normalizedLang}
+          style={vscDarkPlus}
+          PreTag="div"
+          customStyle={{
+            margin: 0,
+            padding: "0.875rem",
+            background: "transparent",
+            fontSize: "0.75rem",
+            lineHeight: "1.625",
+          }}
+          codeTagProps={{
+            style: {
+              fontFamily: "inherit",
+            },
+          }}
+        >
+          {codeText}
+        </SyntaxHighlighter>
+      </div>
+    </div>
+  );
+};
+
+const MessageBubble = ({ role, content, userAvatar, onRegenerate, images }) => {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
-  const [imgError, setImgError] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const [failedUrls, setFailedUrls] = useState({});
+  const [previewImage, setPreviewImage] = useState(null);
+
+  const validImages = (
+    Array.isArray(images) ? images : images ? [images] : []
+  )
+    .map((img, index) => {
+      if (typeof img === "string") {
+        return { url: img.trim(), alt: `Image ${index + 1}` };
+      }
+      if (img && typeof img === "object") {
+        const url = img.url || img.src || img.image_url || "";
+        return {
+          url: typeof url === "string" ? url.trim() : "",
+          alt: img.description || img.alt || img.title || `Image ${index + 1}`,
+        };
+      }
+      return null;
+    })
+    .filter((item) => item && item.url && !failedUrls[item.url]);
+
+  const hasImages = validImages.length > 0;
+  const hasContent = Boolean(content && content.trim());
+
+  useEffect(() => {
+    if (!previewImage) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setPreviewImage(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewImage]);
 
   const handleCopy = () => {
     if (!content) return;
@@ -22,134 +128,320 @@ const MessageBubble = ({ role, content, userAvatar, onRegenerate }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  return (
-    <div
-      className={`flex items-start gap-2.5 sm:gap-3.5 w-full ${
-        isUser ? "justify-end" : "justify-start"
-      }`}
-    >
-      {!isUser && (
-        <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
-          <Sparkles size={15} className="text-white" />
-        </div>
-      )}
+  const handleImageError = (url) => {
+    setFailedUrls((prev) => ({ ...prev, [url]: true }));
+  };
 
+  return (
+    <>
       <div
-        className={`group flex flex-col max-w-[85%] sm:max-w-[78%] ${
-          isUser ? "items-end" : "items-start"
+        className={`flex items-start gap-3 sm:gap-3.5 w-full ${
+          isUser ? "justify-end" : "justify-start"
         }`}
       >
+        {/* Assistant Avatar */}
+        {!isUser && (
+          <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
+            <Sparkles size={15} className="text-white" />
+          </div>
+        )}
+
+        {/* Bubble & Actions */}
         <div
-          className={`px-4 py-3 rounded-2xl text-sm leading-relaxed break-words ${
+          className={`group flex flex-col ${
             isUser
-              ? "bg-zinc-800 text-white border border-zinc-700 rounded-br-xs whitespace-pre-wrap"
-              : "bg-zinc-900/70 text-zinc-200 border border-zinc-800 rounded-bl-xs"
+              ? "max-w-[85%] sm:max-w-[75%] items-end"
+              : "max-w-[92%] sm:max-w-[84%] items-start"
           }`}
         >
-          {isUser ? (
-            content
-          ) : (
-            <Markdown
-              components={{
-                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                h1: ({ children }) => (
-                  <h1 className="text-lg font-bold text-white mt-3 mb-1.5">
-                    {children}
-                  </h1>
-                ),
-                h2: ({ children }) => (
-                  <h2 className="text-base font-bold text-white mt-3 mb-1.5">
-                    {children}
-                  </h2>
-                ),
-                h3: ({ children }) => (
-                  <h3 className="text-sm font-semibold text-white mt-2.5 mb-1">
-                    {children}
-                  </h3>
-                ),
-                ul: ({ children }) => (
-                  <ul className="list-disc pl-5 mb-2 space-y-1">{children}</ul>
-                ),
-                ol: ({ children }) => (
-                  <ol className="list-decimal pl-5 mb-2 space-y-1">
-                    {children}
-                  </ol>
-                ),
-                strong: ({ children }) => (
-                  <strong className="font-semibold text-white">
-                    {children}
-                  </strong>
-                ),
-                code: ({ inline, children }) =>
-                  inline ? (
-                    <code className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-100 font-mono text-xs">
-                      {children}
-                    </code>
+          <div
+            className={`rounded-2xl break-words overflow-hidden ${
+              isUser
+                ? "bg-zinc-800 text-white border border-zinc-700 rounded-br-xs text-sm leading-relaxed"
+                : "bg-zinc-900/75 text-zinc-200 border border-zinc-800/90 rounded-bl-xs text-[14.5px] leading-[1.72]"
+            } ${hasContent ? (isUser ? "px-4 py-3" : "px-5 py-4") : "p-2"}`}
+          >
+            {/* Image Gallery */}
+            {hasImages && (
+              <div
+                className={`grid gap-2.5 ${
+                  validImages.length === 1 ? "grid-cols-1" : "grid-cols-2"
+                } ${hasContent ? "mb-4" : ""}`}
+              >
+                {validImages.map((img, idx) => (
+                  <button
+                    key={`${img.url}-${idx}`}
+                    type="button"
+                    onClick={() => setPreviewImage(img)}
+                    className="group/img relative overflow-hidden rounded-xl border border-zinc-700/80 bg-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-500 cursor-pointer block text-left"
+                  >
+                    <img
+                      src={img.url}
+                      alt={img.alt}
+                      loading="lazy"
+                      onError={() => handleImageError(img.url)}
+                      className={`w-full object-cover transition-transform duration-200 group-hover/img:scale-[1.03] ${
+                        validImages.length === 1
+                          ? "max-h-72 min-h-36"
+                          : "h-32 sm:h-40"
+                      }`}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/30 transition-colors flex items-end justify-end p-2">
+                      <span className="opacity-0 group-hover/img:opacity-100 transition-opacity p-1.5 rounded-lg bg-black/80 border border-zinc-700 text-white">
+                        <Maximize2 size={12} />
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Text / Rich AI Markdown Content */}
+            {hasContent &&
+              (isUser ? (
+                <div className="whitespace-pre-wrap">{content}</div>
+              ) : (
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    // Paragraphs
+                    p: ({ children }) => (
+                      <p className="mb-3.5 last:mb-0 text-zinc-200/95">
+                        {children}
+                      </p>
+                    ),
+
+                    // Distinct Headings with clear hierarchy & breathing room
+                    h1: ({ children }) => (
+                      <h1 className="text-xl font-bold text-white tracking-tight mt-6 mb-3 pb-2 border-b border-zinc-800 first:mt-0">
+                        {children}
+                      </h1>
+                    ),
+                    h2: ({ children }) => (
+                      <h2 className="text-[17px] font-bold text-white tracking-tight mt-6 mb-2.5 first:mt-0">
+                        {children}
+                      </h2>
+                    ),
+                    h3: ({ children }) => (
+                      <h3 className="text-[15px] font-semibold text-zinc-100 mt-5 mb-2 first:mt-0">
+                        {children}
+                      </h3>
+                    ),
+                    h4: ({ children }) => (
+                      <h4 className="text-sm font-semibold text-zinc-200 mt-4 mb-1.5 first:mt-0">
+                        {children}
+                      </h4>
+                    ),
+
+                    // Lists with comfortable item spacing
+                    ul: ({ children }) => (
+                      <ul className="list-disc pl-5 my-3.5 space-y-2 marker:text-zinc-500">
+                        {children}
+                      </ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="list-decimal pl-5 my-3.5 space-y-2 marker:text-zinc-400 marker:font-semibold">
+                        {children}
+                      </ol>
+                    ),
+                    li: ({ children }) => (
+                      <li className="pl-1 leading-relaxed text-zinc-200">
+                        {children}
+                      </li>
+                    ),
+
+                    // Styled Monochrome Links with external indicator
+                    a: ({ href, children }) => (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md bg-zinc-800/90 hover:bg-zinc-700 text-white font-medium text-[13px] border border-zinc-700/80 underline decoration-zinc-500 underline-offset-2 transition-colors"
+                      >
+                        <span>{children}</span>
+                        <ArrowUpRight size={12} className="text-zinc-400 shrink-0" />
+                      </a>
+                    ),
+
+                    // Emphasis & Dividers
+                    strong: ({ children }) => (
+                      <strong className="font-semibold text-white">
+                        {children}
+                      </strong>
+                    ),
+                    em: ({ children }) => (
+                      <em className="italic text-zinc-300">{children}</em>
+                    ),
+                    hr: () => <hr className="my-5 border-zinc-800" />,
+
+                    // Blockquotes / Callouts
+                    blockquote: ({ children }) => (
+                      <blockquote className="my-4 pl-4 py-1.5 pr-3 border-l-2 border-zinc-500 bg-zinc-950/60 rounded-r-xl text-zinc-300 italic">
+                        {children}
+                      </blockquote>
+                    ),
+
+                    // Structured Monochrome Tables
+                    table: ({ children }) => (
+                      <div className="my-4 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/80 scrollbar-none">
+                        <table className="w-full border-collapse text-left text-xs sm:text-[13px]">
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    thead: ({ children }) => (
+                      <thead className="bg-zinc-900 border-b border-zinc-800 text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+                        {children}
+                      </thead>
+                    ),
+                    tbody: ({ children }) => (
+                      <tbody className="divide-y divide-zinc-800/70">
+                        {children}
+                      </tbody>
+                    ),
+                    tr: ({ children }) => (
+                      <tr className="hover:bg-zinc-900/50 transition-colors">
+                        {children}
+                      </tr>
+                    ),
+                    th: ({ children }) => (
+                      <th className="px-3.5 py-2.5 font-semibold text-white whitespace-nowrap">
+                        {children}
+                      </th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="px-3.5 py-2.5 text-zinc-300 align-top leading-relaxed">
+                        {children}
+                      </td>
+                    ),
+
+                    // Prevent <pre> from wrapping our custom <CodeBlock> div
+                    pre: ({ children }) => <>{children}</>,
+
+                    // Inline & Fenced Code Blocks
+                    code: ({ inline, className, children }) => {
+                      const match = /language-([^\s]+)/.exec(className || "");
+                      const isInline =
+                        inline ?? (!match && !String(children).includes("\n"));
+
+                      if (isInline) {
+                        return (
+                          <code className="px-1.5 py-0.5 mx-0.5 rounded-md bg-zinc-800 border border-zinc-700/70 text-zinc-100 font-mono text-[12.5px]">
+                            {children}
+                          </code>
+                        );
+                      }
+
+                      return (
+                        <CodeBlock language={match?.[1]}>
+                          {children}
+                        </CodeBlock>
+                      );
+                    },
+                  }}
+                >
+                  {normalizeMarkdown(content)}
+                </Markdown>
+              ))}
+          </div>
+
+          {/* Assistant Action Bar */}
+          {!isUser && (
+            <div className="flex items-center gap-1 mt-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
+              {hasContent && (
+                <button
+                  onClick={handleCopy}
+                  className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
+                  title="Copy"
+                >
+                  {copied ? (
+                    <Check size={13} className="text-white" />
                   ) : (
-                    <pre className="p-3 my-2 rounded-xl bg-black border border-zinc-800 overflow-x-auto font-mono text-xs text-zinc-200">
-                      <code>{children}</code>
-                    </pre>
-                  ),
-              }}
-            >
-              {content}
-            </Markdown>
+                    <Copy size={13} />
+                  )}
+                </button>
+              )}
+              <button
+                className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
+                title="Good response"
+              >
+                <ThumbsUp size={13} />
+              </button>
+              <button
+                className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
+                title="Bad response"
+              >
+                <ThumbsDown size={13} />
+              </button>
+              {onRegenerate && (
+                <button
+                  onClick={onRegenerate}
+                  className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
+                  title="Regenerate"
+                >
+                  <RotateCcw size={13} />
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        {!isUser && (
-          <div className="flex items-center gap-1 mt-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
-            <button
-              onClick={handleCopy}
-              className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
-              title="Copy"
-            >
-              {copied ? (
-                <Check size={13} className="text-white" />
-              ) : (
-                <Copy size={13} />
-              )}
-            </button>
-            <button
-              className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
-              title="Good response"
-            >
-              <ThumbsUp size={13} />
-            </button>
-            <button
-              className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
-              title="Bad response"
-            >
-              <ThumbsDown size={13} />
-            </button>
-            {onRegenerate && (
-              <button
-                onClick={onRegenerate}
-                className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
-                title="Regenerate"
-              >
-                <RotateCcw size={13} />
-              </button>
+        {/* User Avatar */}
+        {isUser && (
+          <div className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center shrink-0 mt-0.5 overflow-hidden border border-zinc-700">
+            {userAvatar && !avatarError ? (
+              <img
+                src={userAvatar}
+                alt="User"
+                onError={() => setAvatarError(true)}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User size={15} />
             )}
           </div>
         )}
       </div>
 
-      {isUser && (
-        <div className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center shrink-0 mt-0.5 overflow-hidden border border-zinc-700">
-          {userAvatar && !imgError ? (
+      {/* Fullscreen Lightbox Modal */}
+      {previewImage && (
+        <div
+          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] flex flex-col items-center"
+          >
+            <div className="flex items-center gap-2 self-end mb-2">
+              <a
+                href={previewImage.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+                title="Open original image"
+              >
+                <ExternalLink size={16} />
+              </a>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                title="Close preview"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
             <img
-              src={userAvatar}
-              alt="User"
-              onError={() => setImgError(true)}
-              className="w-full h-full object-cover"
+              src={previewImage.url}
+              alt={previewImage.alt}
+              className="max-h-[80vh] w-auto rounded-2xl border border-zinc-800 object-contain bg-zinc-950"
             />
-          ) : (
-            <User size={15} />
-          )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

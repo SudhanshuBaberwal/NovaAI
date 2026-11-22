@@ -1,5 +1,17 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowUp, Paperclip, Globe, Mic } from "lucide-react";
+import {
+  ArrowUp,
+  Paperclip,
+  Globe,
+  Mic,
+  Zap,
+  Code2,
+  MessageSquare,
+  FileText,
+  Presentation,
+  ImageIcon,
+  Globe2,
+} from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import sendMessage from "../features/sendMessage";
 import { addMessages } from "../redux/messageSlice";
@@ -15,6 +27,7 @@ const ChatInput = () => {
   const [input, setInput] = useState("");
   const [isWebSearch, setIsWebSearch] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState("auto");
   const textareaRef = useRef(null);
   const dispatch = useDispatch();
 
@@ -26,6 +39,59 @@ const ChatInput = () => {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
     }
   }, [input]);
+
+  const agents = [
+    {
+      id: "auto",
+      icon: Zap,
+      label: "Auto",
+      placeholder: "Message NovaAI...",
+    },
+    {
+      id: "chat",
+      icon: MessageSquare,
+      label: "Chat",
+      placeholder: "Ask a question or start a conversation...",
+    },
+    {
+      id: "coding",
+      icon: Code2,
+      label: "Coding",
+      placeholder: "Write, debug, or refactor code...",
+    },
+    {
+      id: "pdf",
+      icon: FileText,
+      label: "PDF",
+      placeholder: "Generate or summarize a PDF document...",
+    },
+    {
+      id: "ppt",
+      icon: Presentation,
+      label: "PPT",
+      placeholder: "Describe the slides you want to create...",
+    },
+    {
+      id: "image",
+      icon: ImageIcon,
+      label: "Image",
+      placeholder: "Describe the image you want to generate...",
+    },
+    {
+      id: "search",
+      icon: Globe2,
+      label: "Search",
+      placeholder: "Search the web for real-time information...",
+    },
+  ];
+
+  const activeAgent =
+    agents.find((agent) => agent.id === selectedAgent) || agents[0];
+
+  const handleSelectAgent = (agentId) => {
+    setSelectedAgent(agentId);
+    setIsWebSearch(agentId === "search");
+  };
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -64,22 +130,24 @@ const ChatInput = () => {
           await updateConversation({ id: conversationId, title: newTitle });
           dispatch(setConvTitle({ conversationId, title: newTitle }));
           dispatch(
-            setSelectedConversation({ ...conversation, title: newTitle })
+            setSelectedConversation({ ...conversation, title: newTitle }),
           );
         } catch (titleErr) {
           console.error("Failed to update title:", titleErr);
         }
       }
 
-      // 4. Send message to backend & append assistant reply
+      // 4. Send message & selected agent to backend
       const data = await sendMessage({
         prompt: message,
         conversationId,
+        agent: selectedAgent.toLowerCase(),
+        // isWebSearch: isWebSearch || selectedAgent === "search",
       });
 
-      const aiReply = data?.response || data?.message || data?.data;
+      const aiReply = data?.response || data?.message || data?.data || data.answer;
       if (aiReply) {
-        dispatch(addMessages({ role: "assistant", content: aiReply }));
+        dispatch(addMessages({ role: "assistant", content: data.answer,images:data.images }));
       }
     } catch (error) {
       console.error("Failed to send message:", error);
@@ -101,30 +169,58 @@ const ChatInput = () => {
         onSubmit={handleSubmit}
         className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl p-2.5 focus-within:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-700 transition-all shadow-xl"
       >
+        {/* Agent Selector Pills */}
+        <div className="flex items-center gap-1.5 flex-wrap pb-2.5 mb-1.5 border-b border-zinc-800/80">
+          {agents.map((agent) => {
+            const isActive = selectedAgent === agent.id;
+            const Icon = agent.icon;
+
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                onClick={() => handleSelectAgent(agent.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-all duration-150 cursor-pointer ${
+                  isActive
+                    ? "bg-white text-black font-semibold border-white"
+                    : "bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white hover:bg-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <Icon size={13} strokeWidth={isActive ? 2.4 : 2} />
+                <span>{agent.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Prompt Textarea */}
         <textarea
           ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Message NovaAI..."
+          placeholder={activeAgent.placeholder}
           rows={1}
           className="w-full bg-transparent text-white placeholder-zinc-500 text-sm resize-none focus:outline-none px-2 py-1 max-h-44 scrollbar-none"
         />
 
+        {/* Bottom Controls */}
         <div className="flex items-center justify-between pt-2 px-1">
           <div className="flex items-center gap-1">
             <button
               type="button"
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
               title="Attach File"
             >
               <Paperclip size={18} />
             </button>
             <button
               type="button"
-              onClick={() => setIsWebSearch((prev) => !prev)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors ${
-                isWebSearch
+              onClick={() =>
+                handleSelectAgent(selectedAgent === "search" ? "auto" : "search")
+              }
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                isWebSearch || selectedAgent === "search"
                   ? "bg-zinc-100 text-black font-semibold"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800"
               }`}
@@ -138,7 +234,7 @@ const ChatInput = () => {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
               title="Voice Input"
             >
               <Mic size={18} />

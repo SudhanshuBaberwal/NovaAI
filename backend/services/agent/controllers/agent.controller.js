@@ -12,7 +12,7 @@ export const agent = async (req, res) => {
       });
     }
 
-    const { prompt, conversationId } = req.body;
+    const { prompt, conversationId , agent } = req.body;
 
     if (!prompt?.trim()) {
       return res.status(400).json({
@@ -37,6 +37,7 @@ export const agent = async (req, res) => {
     const result = await graph.invoke({
       prompt: prompt.trim(),
       conversationId,
+      agent
     });
 
     const response = result.aiResponse;
@@ -51,11 +52,13 @@ export const agent = async (req, res) => {
       conversationId,
       role: "assistant",
       content: response,
+      images:result.images
     });
 
     return res.status(200).json({
       success: true,
-      response,
+      answer:response,
+      images:result.images
     });
   } catch (error) {
     console.error("Error in agent API:", error);

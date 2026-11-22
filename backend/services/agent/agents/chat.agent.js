@@ -1,5 +1,5 @@
 import { getModel } from "../models/LLMmodels.js";
-import { getMemory, addMessage } from "../config/memory.js";
+import { getMemory } from "../config/memory.js";
 import {
   AIMessage,
   HumanMessage,
@@ -16,9 +16,44 @@ export const chatAgent = async (state) => {
       ? rawHistory.messages
       : [];
 
+  const hasSearchResults =
+    Array.isArray(state.searchResults) && state.searchResults.length > 0;
+
+  const formattedSearchResults = hasSearchResults
+    ? state.searchResults
+        .map(
+          (item, idx) =>
+            `[${idx + 1}] ${item.title || "Source"} (${item.url || ""})\n${item.content || ""}`
+        )
+        .join("\n\n")
+    : "";
+
+  const nowUTC = new Date().toUTCString();
+  const nowIST = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    dateStyle: "full",
+    timeStyle: "medium",
+  });
+
+  const searchContext = hasSearchResults
+    ? `
+Web Search Results:
+${formattedSearchResults}
+
+Search Instructions:
+- Synthesize an accurate answer using the web search results above.
+- For queries asking the current time, date, or live status ("now", "today"), rely on the Current Reference Time below rather than cached timestamps inside scraped snippets.
+- Cite sources naturally with Markdown links when helpful, and never mention internal search tools.
+`
+    : "";
+
   const systemPrompt = `
 You are CortexAI, a sharp, helpful, and reliable AI assistant.
 
+Current Reference Time:
+- UTC: ${nowUTC}
+- India (IST): ${nowIST}
+${searchContext}
 Core Behavior:
 - Start directly with the answer. Never open with filler phrases like "Sure!", "Certainly!", or "Here is...".
 - Match response length to the query: keep simple answers brief and natural, and provide structured, thorough explanations for complex or technical topics.
@@ -54,12 +89,6 @@ Coding Guidelines:
   messages.push(new HumanMessage(state.prompt));
 
   const result = await llm.invoke(messages);
-
-  // Save both turns to Redis memory for future messages
-  if (state.conversationId) {
-    await addMessage(state.conversationId, "user", state.prompt);
-    await addMessage(state.conversationId, "assistant", result.content);
-  }
 
   return {
     ...state,

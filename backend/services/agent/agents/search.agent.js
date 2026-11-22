@@ -1,3 +1,30 @@
-export const searchAgent = async (params) => {
-    
-}
+import { searchTool } from "../config/tavily.js";
+
+export const searchAgent = async (state) => {
+  try {
+    const response = await searchTool.invoke({
+      query: state.prompt,
+    });
+
+    const results = Array.isArray(response?.results)
+      ? response.results
+      : Array.isArray(response)
+        ? response
+        : [];
+
+    const images = Array.isArray(response?.images) ? response.images : [];
+
+    return {
+      ...state,
+      searchResults: results,
+      images,
+    };
+  } catch (error) {
+    console.error("Search agent error:", error);
+    return {
+      ...state,
+      searchResults: [],
+      images: [],
+    };
+  }
+};

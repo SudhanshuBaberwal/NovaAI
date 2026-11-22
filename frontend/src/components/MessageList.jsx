@@ -91,6 +91,7 @@ const MessageList = () => {
           role={msg.role || msg.sender}
           content={msg.content || msg.text || msg.message || ""}
           userAvatar={userData?.avatar}
+          images={msg.images}
         />
       ))}
       <div ref={messagesEndRef} />
