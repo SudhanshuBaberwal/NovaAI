@@ -5,6 +5,7 @@ import MessageBubble from "./MessageBubble";
 
 const MessageList = () => {
   const rawMessages = useSelector((state) => state.message?.messages);
+  const artifacts = useSelector((state) => state.message?.artifacts);
   const { userData } = useSelector((state) => state.user || {});
   const messagesEndRef = useRef(null);
 
@@ -20,9 +21,14 @@ const MessageList = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const hasOpenArtifact = Array.isArray(artifacts) && artifacts.length > 0;
+  const containerWidth = hasOpenArtifact ? "max-w-3xl" : "max-w-4xl";
+
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-4 max-w-3xl mx-auto w-full text-center">
+      <div
+        className={`flex-1 flex flex-col items-center justify-center p-4 sm:p-6 ${containerWidth} mx-auto w-full text-center`}
+      >
         <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-6 shadow-inner">
           <Sparkles size={28} className="text-white" />
         </div>
@@ -84,7 +90,9 @@ const MessageList = () => {
   }
 
   return (
-    <div className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <div
+      className={`flex-1 w-full ${containerWidth} mx-auto px-4 sm:px-6 py-6 space-y-6`}
+    >
       {messages.map((msg, idx) => (
         <MessageBubble
           key={msg._id || idx}
@@ -92,6 +100,7 @@ const MessageList = () => {
           content={msg.content || msg.text || msg.message || ""}
           userAvatar={userData?.avatar}
           images={msg.images}
+          artifacts={msg.artifacts}
         />
       ))}
       <div ref={messagesEndRef} />

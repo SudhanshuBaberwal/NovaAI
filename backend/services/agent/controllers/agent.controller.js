@@ -12,7 +12,7 @@ export const agent = async (req, res) => {
       });
     }
 
-    const { prompt, conversationId , agent } = req.body;
+    const { prompt, conversationId, agent } = req.body;
 
     if (!prompt?.trim()) {
       return res.status(400).json({
@@ -37,10 +37,18 @@ export const agent = async (req, res) => {
     const result = await graph.invoke({
       prompt: prompt.trim(),
       conversationId,
-      agent
+      agent,
     });
 
-    const response = result.aiResponse;
+    const response =
+      result?.aiResponse ||
+      result?.response ||
+      result?.answer ||
+      (result?.artifacts?.length
+        ? "Code Generated Successfully."
+        : result?.images?.length
+          ? "Here is the generated image."
+          : "Sorry, I couldn't generate a response. Please try again.");
 
     // 2. Save both user and assistant messages to Redis with exact positional arguments
     await addMessage(conversationId, "user", prompt.trim());
@@ -52,13 +60,15 @@ export const agent = async (req, res) => {
       conversationId,
       role: "assistant",
       content: response,
-      images:result.images
+      images: result?.images,
+      artifacts: result?.artifacts,
     });
 
     return res.status(200).json({
       success: true,
-      answer:response,
-      images:result.images
+      answer: response,
+      images: result.images,
+      artifacts: result.artifacts,
     });
   } catch (error) {
     console.error("Error in agent API:", error);

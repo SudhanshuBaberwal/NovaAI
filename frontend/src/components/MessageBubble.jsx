@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useDispatch } from "react-redux";
 import {
   User,
   Sparkles,
@@ -11,11 +12,14 @@ import {
   Maximize2,
   ExternalLink,
   ArrowUpRight,
+  Code2,
+  PanelRightOpen,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { setArtifacts } from "../redux/messageSlice";
 
 // Repairs collapsed single-line Markdown tables (e.g. "| Col1 | Col2 | |---|---| | Val1 | Val2 |")
 const normalizeMarkdown = (text) => {
@@ -25,6 +29,7 @@ const normalizeMarkdown = (text) => {
 
 const CodeBlock = ({ language, children }) => {
   const [copiedCode, setCopiedCode] = useState(false);
+  const dispatch = useDispatch();
   const codeText = String(children).replace(/\n$/, "");
   const normalizedLang = language ? language.toLowerCase() : "text";
 
@@ -34,29 +39,58 @@ const CodeBlock = ({ language, children }) => {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
+  const handleOpenInArtifact = () => {
+    const ext = normalizedLang === "text" ? "txt" : normalizedLang;
+    const fileName = `snippet.${ext}`;
+    dispatch(
+      setArtifacts([
+        {
+          id: Date.now(),
+          type: "Code",
+          title: fileName,
+          files: [
+            {
+              name: fileName,
+              content: codeText,
+            },
+          ],
+        },
+      ])
+    );
+  };
+
   return (
     <div className="my-4 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-md">
       <div className="flex items-center justify-between px-3.5 py-2 bg-zinc-900/90 border-b border-zinc-800 text-[11px] font-mono text-zinc-400">
-        <span className="uppercase tracking-wider">
-          {language || "code"}
-        </span>
-        <button
-          type="button"
-          onClick={handleCopyCode}
-          className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-        >
-          {copiedCode ? (
-            <>
-              <Check size={12} className="text-white" />
-              <span className="text-white">Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy size={12} />
-              <span>Copy</span>
-            </>
-          )}
-        </button>
+        <span className="uppercase tracking-wider">{language || "code"}</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleOpenInArtifact}
+            className="flex items-center gap-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            title="Open in Artifact Panel"
+          >
+            <PanelRightOpen size={12} />
+            <span>Artifact</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyCode}
+            className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          >
+            {copiedCode ? (
+              <>
+                <Check size={12} className="text-white" />
+                <span className="text-white">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy size={12} />
+                <span>Copy</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto font-mono text-xs leading-relaxed scrollbar-none">
@@ -84,8 +118,16 @@ const CodeBlock = ({ language, children }) => {
   );
 };
 
-const MessageBubble = ({ role, content, userAvatar, onRegenerate, images }) => {
+const MessageBubble = ({
+  role,
+  content,
+  userAvatar,
+  onRegenerate,
+  images,
+  artifacts,
+}) => {
   const isUser = role === "user";
+  const dispatch = useDispatch();
   const [copied, setCopied] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [failedUrls, setFailedUrls] = useState({});
@@ -111,6 +153,7 @@ const MessageBubble = ({ role, content, userAvatar, onRegenerate, images }) => {
 
   const hasImages = validImages.length > 0;
   const hasContent = Boolean(content && content.trim());
+  const hasArtifacts = Array.isArray(artifacts) && artifacts.length > 0;
 
   useEffect(() => {
     if (!previewImage) return;
@@ -148,25 +191,31 @@ const MessageBubble = ({ role, content, userAvatar, onRegenerate, images }) => {
 
         {/* Bubble & Actions */}
         <div
-          className={`group flex flex-col ${
+          className={`group flex flex-col min-w-0 ${
             isUser
               ? "max-w-[85%] sm:max-w-[75%] items-end"
-              : "max-w-[92%] sm:max-w-[84%] items-start"
+              : "flex-1 max-w-full items-start"
           }`}
         >
           <div
             className={`rounded-2xl break-words overflow-hidden ${
               isUser
                 ? "bg-zinc-800 text-white border border-zinc-700 rounded-br-xs text-sm leading-relaxed"
-                : "bg-zinc-900/75 text-zinc-200 border border-zinc-800/90 rounded-bl-xs text-[14.5px] leading-[1.72]"
-            } ${hasContent ? (isUser ? "px-4 py-3" : "px-5 py-4") : "p-2"}`}
+                : "w-full bg-zinc-900/75 text-zinc-200 border border-zinc-800/90 rounded-bl-xs text-[14.5px] leading-[1.72]"
+            } ${
+              hasContent || hasArtifacts
+                ? isUser
+                  ? "px-4 py-3"
+                  : "px-5 py-4"
+                : "p-2"
+            }`}
           >
             {/* Image Gallery */}
             {hasImages && (
               <div
-                className={`grid gap-2.5 ${
+                className={`grid gap-2.5 max-w-xl ${
                   validImages.length === 1 ? "grid-cols-1" : "grid-cols-2"
-                } ${hasContent ? "mb-4" : ""}`}
+                } ${hasContent || hasArtifacts ? "mb-4" : ""}`}
               >
                 {validImages.map((img, idx) => (
                   <button
@@ -259,7 +308,10 @@ const MessageBubble = ({ role, content, userAvatar, onRegenerate, images }) => {
                         className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md bg-zinc-800/90 hover:bg-zinc-700 text-white font-medium text-[13px] border border-zinc-700/80 underline decoration-zinc-500 underline-offset-2 transition-colors"
                       >
                         <span>{children}</span>
-                        <ArrowUpRight size={12} className="text-zinc-400 shrink-0" />
+                        <ArrowUpRight
+                          size={12}
+                          className="text-zinc-400 shrink-0"
+                        />
                       </a>
                     ),
 
@@ -333,9 +385,7 @@ const MessageBubble = ({ role, content, userAvatar, onRegenerate, images }) => {
                       }
 
                       return (
-                        <CodeBlock language={match?.[1]}>
-                          {children}
-                        </CodeBlock>
+                        <CodeBlock language={match?.[1]}>{children}</CodeBlock>
                       );
                     },
                   }}
@@ -343,6 +393,39 @@ const MessageBubble = ({ role, content, userAvatar, onRegenerate, images }) => {
                   {normalizeMarkdown(content)}
                 </Markdown>
               ))}
+
+            {/* Interactive Artifact Card (Opens Preview & Code Panel on Demand) */}
+            {!isUser && hasArtifacts && (
+              <button
+                type="button"
+                onClick={() => dispatch(setArtifacts(artifacts))}
+                className={`${
+                  hasContent ? "mt-3.5" : ""
+                } flex items-center justify-between gap-3 w-full max-w-md px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800/80 border border-zinc-800 hover:border-zinc-700 transition-all text-left cursor-pointer group/art`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white shrink-0">
+                    <Code2 size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">
+                      {artifacts[0]?.title || "Generated Project"}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 truncate">
+                      {artifacts[0]?.files?.length || 1}{" "}
+                      {(artifacts[0]?.files?.length || 1) === 1
+                        ? "file"
+                        : "files"}{" "}
+                      • Click to open Preview & Code
+                    </p>
+                  </div>
+                </div>
+                <ArrowUpRight
+                  size={15}
+                  className="text-zinc-500 group-hover/art:text-white shrink-0 transition-colors"
+                />
+              </button>
+            )}
           </div>
 
           {/* Assistant Action Bar */}

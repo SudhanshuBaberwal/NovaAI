@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import sendMessage from "../features/sendMessage";
-import { addMessages } from "../redux/messageSlice";
+import { addMessages, setArtifacts } from "../redux/messageSlice";
 import {
   addConversation,
   setSelectedConversation,
@@ -22,6 +22,40 @@ import {
 } from "../redux/conversationSlice";
 import { createConversation } from "../features/createConversations";
 import updateConversation from "../features/updateConversation";
+
+const extractFallbackArtifacts = (markdownText, promptTitle) => {
+  const codeBlockRegex = /```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/g;
+  const matches = [...String(markdownText || "").matchAll(codeBlockRegex)];
+  if (matches.length === 0) return [];
+
+  const files = matches.map((m, idx) => {
+    const lang = (m[1] || "html").toLowerCase();
+    const ext =
+      lang === "javascript" ? "js" : lang === "typescript" ? "ts" : lang || "txt";
+    const defaultName =
+      ext === "html"
+        ? "index.html"
+        : ext === "css"
+          ? "style.css"
+          : ext === "js"
+            ? "script.js"
+            : `file-${idx + 1}.${ext}`;
+
+    return {
+      name: defaultName,
+      content: m[2].trim(),
+    };
+  });
+
+  return [
+    {
+      id: Date.now(),
+      type: "Project",
+      title: promptTitle,
+      files,
+    },
+  ];
+};
 
 const ChatInput = () => {
   const [input, setInput] = useState("");
@@ -32,6 +66,7 @@ const ChatInput = () => {
   const dispatch = useDispatch();
 
   const { selectedConversation } = useSelector((state) => state.conversation);
+  const artifacts = useSelector((state) => state.message?.artifacts);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -142,12 +177,32 @@ const ChatInput = () => {
         prompt: message,
         conversationId,
         agent: selectedAgent.toLowerCase(),
-        // isWebSearch: isWebSearch || selectedAgent === "search",
       });
 
-      const aiReply = data?.response || data?.message || data?.data || data.answer;
+      const aiReply =
+        data?.response || data?.answer || data?.message || data?.data;
+
       if (aiReply) {
-        dispatch(addMessages({ role: "assistant", content: data.answer,images:data.images }));
+        let incomingArtifacts = Array.isArray(data?.artifacts)
+          ? data.artifacts
+          : [];
+
+        if (
+          incomingArtifacts.length === 0 &&
+          selectedAgent.toLowerCase() === "coding"
+        ) {
+          incomingArtifacts = extractFallbackArtifacts(aiReply, message);
+        }
+
+        dispatch(setArtifacts(incomingArtifacts));
+        dispatch(
+          addMessages({
+            role: "assistant",
+            content: aiReply,
+            images: data?.images || [],
+            artifacts: incomingArtifacts,
+          }),
+        );
       }
     } catch (error) {
       console.error("Failed to send message:", error);
@@ -163,8 +218,13 @@ const ChatInput = () => {
     }
   };
 
+  const hasOpenArtifact = Array.isArray(artifacts) && artifacts.length > 0;
+  const containerWidth = hasOpenArtifact ? "max-w-3xl" : "max-w-4xl";
+
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 pb-4 pt-2 shrink-0">
+    <div
+      className={`w-full ${containerWidth} mx-auto px-4 sm:px-6 pb-4 pt-2 shrink-0`}
+    >
       <form
         onSubmit={handleSubmit}
         className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl p-2.5 focus-within:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-700 transition-all shadow-xl"
@@ -217,7 +277,9 @@ const ChatInput = () => {
             <button
               type="button"
               onClick={() =>
-                handleSelectAgent(selectedAgent === "search" ? "auto" : "search")
+                handleSelectAgent(
+                  selectedAgent === "search" ? "auto" : "search",
+                )
               }
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                 isWebSearch || selectedAgent === "search"
