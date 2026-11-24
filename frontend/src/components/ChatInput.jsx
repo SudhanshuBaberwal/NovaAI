@@ -107,9 +107,9 @@ const ChatInput = () => {
       placeholder: "Describe the slides you want to create...",
     },
     {
-      id: "image",
+      id: "vision",
       icon: ImageIcon,
-      label: "Image",
+      label: "Vision",
       placeholder: "Describe the image you want to generate...",
     },
     {

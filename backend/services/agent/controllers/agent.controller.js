@@ -1,7 +1,19 @@
-import redis from "../../../shared/redis/redis.js";
 import { addMessage } from "../config/memory.js";
 import graph from "../graph/graph.js";
 import axios from "axios";
+
+const normalizeImages = (images) => {
+  if (!Array.isArray(images)) return [];
+  return images
+    .map((img) => {
+      if (typeof img === "string") return img.trim();
+      if (img && typeof img === "object") {
+        return String(img.url || img.src || "").trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+};
 
 export const agent = async (req, res) => {
   try {
@@ -27,55 +39,99 @@ export const agent = async (req, res) => {
         message: "Conversation ID is required.",
       });
     }
+
+    const cleanPrompt = prompt.trim();
+
+    // 1. Persist user message to database
     await axios.post(`${process.env.CHAT_SERVICE}/save-message`, {
       conversationId,
       role: "user",
-      content: prompt.trim(),
+      content: cleanPrompt,
     });
 
-    // 1. Run the agent graph using existing history before saving the new turn
-    const result = await graph.invoke({
-      prompt: prompt.trim(),
-      conversationId,
-      agent,
-    });
+    // 2. Run the agent graph using existing history before saving the new turn
+    let result;
+    try {
+      result = await graph.invoke({
+        prompt: cleanPrompt,
+        conversationId,
+        agent,
+      });
+    } catch (graphError) {
+      const isRateLimit =
+        graphError?.statusCode === 429 ||
+        graphError?.code === 429 ||
+        String(graphError?.message || "").includes("429");
+
+      if (isRateLimit) {
+        const fallbackMsg =
+          "The AI provider is temporarily busy due to high traffic. Please try again in a few seconds.";
+
+        await addMessage(conversationId, "user", cleanPrompt);
+        await addMessage(conversationId, "assistant", fallbackMsg);
+
+        await axios.post(`${process.env.CHAT_SERVICE}/save-message`, {
+          conversationId,
+          role: "assistant",
+          content: fallbackMsg,
+          images: [],
+          artifacts: [],
+        });
+
+        return res.status(200).json({
+          success: true,
+          answer: fallbackMsg,
+          images: [],
+          artifacts: [],
+        });
+      }
+
+      throw graphError;
+    }
+
+    const normalizedImages = normalizeImages(result?.images);
+    const normalizedArtifacts = Array.isArray(result?.artifacts)
+      ? result.artifacts
+      : [];
 
     const response =
       result?.aiResponse ||
       result?.response ||
       result?.answer ||
-      (result?.artifacts?.length
+      (normalizedArtifacts.length > 0
         ? "Code Generated Successfully."
-        : result?.images?.length
-          ? "Here is the generated image."
+        : normalizedImages.length > 0
+          ? "Image Generated Successfully."
           : "Sorry, I couldn't generate a response. Please try again.");
 
-    // 2. Save both user and assistant messages to Redis with exact positional arguments
-    await addMessage(conversationId, "user", prompt.trim());
+    // 3. Save both user and assistant messages to Redis memory
+    await addMessage(conversationId, "user", cleanPrompt);
     await addMessage(conversationId, "assistant", response);
 
-    // 3. Persist both messages to the database
-
+    // 4. Persist assistant message with string[] images and artifacts to database
     await axios.post(`${process.env.CHAT_SERVICE}/save-message`, {
       conversationId,
       role: "assistant",
       content: response,
-      images: result?.images,
-      artifacts: result?.artifacts,
+      images: normalizedImages,
+      artifacts: normalizedArtifacts,
     });
 
     return res.status(200).json({
       success: true,
       answer: response,
-      images: result.images,
-      artifacts: result.artifacts,
+      images: normalizedImages,
+      artifacts: normalizedArtifacts,
     });
   } catch (error) {
-    console.error("Error in agent API:", error);
+    console.error(
+      "Error in agent API:",
+      error?.response?.data || error.message || error
+    );
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: error?.response?.data?.message || error.message,
     });
   }
 };
