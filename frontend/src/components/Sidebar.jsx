@@ -20,17 +20,21 @@ import {
 import { createConversation } from "../features/createConversations";
 import { logout } from "../features/Logout";
 import { useToast } from "../utils/ToastContext";
+import BillingDrawer from "./BillingDrawer";
 
 const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
   const { showToast } = useToast();
   const [collapsed, setCollapsed] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isBillingOpen, setIsBillingOpen] = useState(false);
   const dispatch = useDispatch();
 
   const { conversations, selectedConversation } = useSelector(
     (state) => state.conversation
   );
   const { userData } = useSelector((state) => state.user);
+
+  const activePlanLabel = String(userData?.plan || "Free");
 
   useEffect(() => {
     const getConv = async () => {
@@ -73,12 +77,8 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
       {/* Sidebar Container */}
       <aside
         className={`fixed lg:static top-0 bottom-0 left-0 z-50 flex flex-col bg-black text-zinc-100 border-r border-zinc-800 transition-all duration-300 ease-in-out shrink-0 ${
-          /* Mobile Drawer Position */
           isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } ${
-          /* Desktop Width Toggle */
-          collapsed ? "lg:w-16" : "w-72 lg:w-64"
-        }`}
+        } ${collapsed ? "lg:w-16" : "w-72 lg:w-64"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between h-14 px-3 border-b border-zinc-800 shrink-0">
@@ -88,23 +88,26 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
                 <span className="font-bold text-base tracking-tight text-white">
                   NovaAI
                 </span>
-                <span className="text-[10px] font-semibold tracking-wider text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full uppercase">
-                  Free
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsBillingOpen(true)}
+                  className="text-[10px] font-semibold tracking-wider text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-2 py-0.5 rounded-full uppercase transition-colors cursor-pointer"
+                  title="Manage Plan"
+                >
+                  {activePlanLabel}
+                </button>
               </div>
               <div className="flex items-center gap-1">
-                {/* Desktop Collapse Toggle */}
                 <button
                   onClick={() => setCollapsed(true)}
-                  className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+                  className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
                   title="Collapse sidebar"
                 >
                   <PanelLeft size={18} />
                 </button>
-                {/* Mobile Close Button */}
                 <button
                   onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
-                  className="flex lg:hidden items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+                  className="flex lg:hidden items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
                 >
                   <X size={18} />
                 </button>
@@ -114,7 +117,7 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
             <div className="flex items-center justify-center w-full">
               <button
                 onClick={() => setCollapsed(false)}
-                className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+                className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
                 title="Expand sidebar"
               >
                 <PanelRight size={18} />
@@ -127,7 +130,7 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
         <div className="p-3 shrink-0">
           <button
             onClick={() => dispatch(setSelectedConversation(null))}
-            className={`w-full flex items-center justify-center gap-2 font-medium bg-white text-black hover:bg-zinc-200 active:scale-[0.98] transition-all duration-150 rounded-lg shadow-sm ${
+            className={`w-full flex items-center justify-center gap-2 font-medium bg-white text-black hover:bg-zinc-200 active:scale-[0.98] transition-all duration-150 rounded-lg shadow-sm cursor-pointer ${
               collapsed ? "h-10 px-0" : "py-2.5 px-3 text-sm"
             }`}
             title="New Chat"
@@ -152,7 +155,7 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
               <button
                 key={conv?._id || Math.random()}
                 onClick={() => handleSelectConversation(conv)}
-                className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left text-sm transition-all duration-150 group ${
+                className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left text-sm transition-all duration-150 group cursor-pointer ${
                   isActive
                     ? "bg-zinc-800 text-white font-medium border border-zinc-700"
                     : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-transparent"
@@ -162,7 +165,9 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
                 <MessageSquare
                   size={16}
                   className={`shrink-0 ${
-                    isActive ? "text-white" : "text-zinc-400 group-hover:text-zinc-200"
+                    isActive
+                      ? "text-white"
+                      : "text-zinc-400 group-hover:text-zinc-200"
                   }`}
                 />
                 {!collapsed && (
@@ -203,8 +208,8 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
                     <p className="text-sm font-medium text-zinc-200 truncate leading-tight">
                       {userData?.name || "User"}
                     </p>
-                    <p className="text-xs text-zinc-500 truncate mt-0.5">
-                      Free Plan
+                    <p className="text-xs text-zinc-500 truncate mt-0.5 capitalize">
+                      {activePlanLabel} Plan
                     </p>
                   </div>
                 )}
@@ -213,44 +218,64 @@ const Sidebar = ({ isMobileOpen, setIsMobileOpen }) => {
               {!collapsed ? (
                 <div className="flex items-center gap-1 shrink-0">
                   <button
-                    className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                    title="Coins"
+                    type="button"
+                    onClick={() => setIsBillingOpen(true)}
+                    className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Coins & Plans"
                   >
                     <Coins size={16} />
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       logout();
                       showToast("Logout Successfully", "success");
                       dispatch(setUserData(null));
                     }}
-                    className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
                     title="Logout"
                   >
                     <LogOut size={16} />
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => {
-                    logout();
-                    showToast("Logout Successfully", "success");
-                    dispatch(setUserData(null));
-                  }}
-                  className="p-1.5 mt-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                  title="Logout"
-                >
-                  <LogOut size={16} />
-                </button>
+                <div className="flex flex-col items-center gap-1 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsBillingOpen(true)}
+                    className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Coins & Plans"
+                  >
+                    <Coins size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout();
+                      showToast("Logout Successfully", "success");
+                      dispatch(setUserData(null));
+                    }}
+                    className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Logout"
+                  >
+                    <LogOut size={16} />
+                  </button>
+                </div>
               )}
             </div>
           ) : (
-            <button className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors">
+            <button className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer">
               Login
             </button>
           )}
         </div>
       </aside>
+
+      {/* Billing & Plans Drawer */}
+      <BillingDrawer
+        isOpen={isBillingOpen}
+        onClose={() => setIsBillingOpen(false)}
+      />
     </>
   );
 };
