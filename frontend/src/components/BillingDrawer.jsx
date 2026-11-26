@@ -10,7 +10,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { setUserData } from "../redux/userSlice";
 import { useToast } from "../utils/ToastContext";
 import createOrder from "../features/createOrder";
 import verifyPayment from "../features/verifyPayment";
@@ -87,6 +88,7 @@ const PLAN_LIST = Object.values(PLANS).map((plan) => ({
 }));
 
 const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
+  const dispatch = useDispatch();
   const { userData } = useSelector((state) => state.user);
   const { showToast } = useToast();
   const [processingPlan, setProcessingPlan] = useState(null);
@@ -117,13 +119,13 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
 
       if (!orderData || orderData?.success === false) {
         throw new Error(
-          orderData?.message || "Failed to create billing order.",
+          orderData?.message || "Failed to create billing order."
         );
       }
 
       if (typeof window.Razorpay !== "function") {
         throw new Error(
-          "Razorpay SDK failed to load. Check your internet connection or script tag.",
+          "Razorpay SDK failed to load. Check your internet connection or script tag."
         );
       }
 
@@ -153,8 +155,49 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
               razorpay_payment_id: paymentResponse.razorpay_payment_id,
               razorpay_signature: paymentResponse.razorpay_signature,
             });
-          } catch (error) {
-            console.log(error);
+
+            if (!data || data?.success === false) {
+              throw new Error(data?.message || "Payment verification failed.");
+            }
+
+            const addedCredits = Number(
+              data?.credits ?? resolvedPlan.credits ?? plan.credits
+            );
+
+            // Use full updated user from backend if returned, otherwise merge optimistically
+            const updatedUser = data?.user
+              ? { ...userData, ...data.user }
+              : {
+                  ...userData,
+                  plan: data?.plan || resolvedPlan.id || plan.id,
+                  credits: (Number(userData?.credits) || 0) + addedCredits,
+                  coins: (Number(userData?.coins) || 0) + addedCredits,
+                  totalCredits:
+                    (Number(userData?.totalCredits) || 0) + addedCredits,
+                  planExpiresAt: new Date(
+                    Date.now() + 30 * 24 * 60 * 60 * 1000
+                  ).toISOString(),
+                };
+
+            dispatch(setUserData(updatedUser));
+
+            if (typeof onPaymentSuccess === "function") {
+              await onPaymentSuccess(data, resolvedPlan);
+            }
+
+            showToast(
+              `${resolvedPlan.name} Plan activated! +${addedCredits} Coins added.`,
+              "success"
+            );
+            onClose?.();
+          } catch (verifyErr) {
+            console.error("Payment verification error:", verifyErr);
+            showToast(
+              verifyErr?.response?.data?.message ||
+                verifyErr?.message ||
+                "Payment verification failed.",
+              "error"
+            );
           }
         },
       };
@@ -165,7 +208,7 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
         showToast(
           failedResponse?.error?.description ||
             "Payment failed. Please try again.",
-          "error",
+          "error"
         );
       });
       razorpay.open();
@@ -175,7 +218,7 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
         error?.response?.data?.message ||
           error?.message ||
           "Unable to create order. Please try again.",
-        "error",
+        "error"
       );
     } finally {
       setProcessingPlan(null);

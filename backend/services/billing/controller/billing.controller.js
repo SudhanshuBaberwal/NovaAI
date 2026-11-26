@@ -120,6 +120,7 @@ export const verifyPayment = async (req, res) => {
           {
             headers: {
               "x-user-id": String(resolvedUserId),
+              ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
             },
           },
         );

@@ -90,27 +90,25 @@ export const updateUserPayment = async (req, res) => {
     await user.save();
 
     const sessionId = await redis.get(`user-session-${user?._id}`);
-    if (sessionId) {
-      await redis.set(
-        `session-${sessionId}`,
-        JSON.stringify({
-          userId: user._id,
-          name: user.name,
-          email: user.email,
-          avatar: user.avatar,
-          plan: user.plan,
-          credits: user.credits,
-          totalCredits: user.totalCredits,
-          planExpiresAt: user.planExpiresAt,
-        }),
-        "EX",
-        7 * 24 * 60 * 60,
-      );
-    }
+    console.log("sessionId:", sessionId);
+    await redis.set(
+      `session-${sessionId}`,
+      JSON.stringify({
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        plan: user.plan,
+        credits: user.credits,
+        totalCredits: user.totalCredits,
+        planExpiresAt: user.planExpiresAt,
+      }),
+      "EX",
+      7 * 24 * 60 * 60,
+    );
 
     return res.status(200).json({
       success: true,
-      user,
     });
   } catch (error) {
     console.log(error);
