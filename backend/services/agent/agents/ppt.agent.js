@@ -1,4 +1,5 @@
 import { getModel } from "../models/LLMmodels.js";
+import { deductCredits } from "../utils/deductCredits.js";
 import { generatePpt } from "../utils/generatePpt.js";
 import { getFromS3 } from "../utils/getFromS3.js";
 import { uploadToS3 } from "../utils/uploadToS3.js";
@@ -29,25 +30,25 @@ const parseAndNormalizeDeck = (rawText, fallbackTopic) => {
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
 
   if (!jsonMatch) {
-    throw new Error("Model did not return a valid JSON presentation structure.");
+    throw new Error(
+      "Model did not return a valid JSON presentation structure.",
+    );
   }
 
   const sanitizedJson = jsonMatch[0].replace(/,\s*([}\]])/g, "$1");
   const parsed = JSON.parse(sanitizedJson);
 
   const title = String(
-    parsed?.title || fallbackTopic || "Generated Presentation"
+    parsed?.title || fallbackTopic || "Generated Presentation",
   ).trim();
-  const subtitle = String(
-    parsed?.subtitle || `Prepared by NovaAI`
-  ).trim();
+  const subtitle = String(parsed?.subtitle || `Prepared by NovaAI`).trim();
 
   const rawSlides = Array.isArray(parsed?.slides) ? parsed.slides : [];
 
   const slides = rawSlides
     .map((slide, idx) => {
       const slideTitle = String(
-        slide?.title || slide?.heading || `Slide ${idx + 1}`
+        slide?.title || slide?.heading || `Slide ${idx + 1}`,
       ).trim();
 
       const rawPoints = Array.isArray(slide?.points)
@@ -139,6 +140,8 @@ Topic: ${userTopic}
     const slideOutline = data.slides
       .map((s, idx) => `${idx + 1}. ${s.title}`)
       .join("\n");
+
+    await deductCredits(state.userId, "ppt");
 
     return {
       ...state,

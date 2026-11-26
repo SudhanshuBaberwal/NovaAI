@@ -2,6 +2,7 @@ import axios from "axios";
 import { getModel } from "../models/LLMmodels.js";
 import { uploadToS3 } from "../utils/uploadToS3.js";
 import { getFromS3 } from "../utils/getFromS3.js";
+import { deductCredits } from "../utils/deductCredits.js";
 
 const DIMENSIONS_BY_RATIO = {
   square: { width: 1024, height: 1024 },
@@ -65,7 +66,7 @@ User Request: ${state.prompt}
 
     const { enhancedPrompt, aspectRatio, style } = parsePromptPlan(
       res.content,
-      state.prompt
+      state.prompt,
     );
 
     const { width, height } = DIMENSIONS_BY_RATIO[aspectRatio];
@@ -81,7 +82,7 @@ User Request: ${state.prompt}
     });
 
     const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-      enhancedPrompt
+      enhancedPrompt,
     )}?${params.toString()}`;
 
     const imageRes = await axios.get(imageUrl, {
@@ -111,7 +112,7 @@ User Request: ${state.prompt}
 
     const expirySeconds = 24 * 60 * 60; // 24 hours
     const downloadUrl = await getFromS3(filename, expirySeconds);
-
+    await deductCredits(state.userId, "vision");
     return {
       ...state,
       aiResponse: [

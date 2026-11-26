@@ -20,8 +20,19 @@ import {
   setSelectedConversation,
   setConvTitle,
 } from "../redux/conversationSlice";
+import { setUserData } from "../redux/userSlice";
 import { createConversation } from "../features/createConversations";
 import updateConversation from "../features/updateConversation";
+
+const AGENT_CREDIT_COST = {
+  auto: 1,
+  chat: 1,
+  search: 5,
+  coding: 10,
+  pdf: 10,
+  vision: 10,
+  ppt: 10,
+};
 
 const extractFallbackArtifacts = (markdownText, promptTitle) => {
   const codeBlockRegex = /```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/g;
@@ -66,6 +77,7 @@ const ChatInput = () => {
   const dispatch = useDispatch();
 
   const { selectedConversation } = useSelector((state) => state.conversation);
+  const { userData } = useSelector((state) => state.user);
   const artifacts = useSelector((state) => state.message?.artifacts);
 
   useEffect(() => {
@@ -173,10 +185,11 @@ const ChatInput = () => {
       }
 
       // 4. Send message & selected agent to backend
+      const normalizedAgent = selectedAgent.toLowerCase();
       const data = await sendMessage({
         prompt: message,
         conversationId,
-        agent: selectedAgent.toLowerCase(),
+        agent: normalizedAgent,
       });
 
       const aiReply =
@@ -189,7 +202,7 @@ const ChatInput = () => {
 
         if (
           incomingArtifacts.length === 0 &&
-          selectedAgent.toLowerCase() === "coding"
+          normalizedAgent === "coding"
         ) {
           incomingArtifacts = extractFallbackArtifacts(aiReply, message);
         }
@@ -203,6 +216,23 @@ const ChatInput = () => {
             artifacts: incomingArtifacts,
           }),
         );
+
+        // 5. Sync remaining credits in Redux immediately
+        if (userData) {
+          const cost =
+            AGENT_CREDIT_COST[data?.agent || normalizedAgent] ?? 1;
+          const updatedCredits =
+            typeof data?.credits === "number"
+              ? data.credits
+              : Math.max(0, (Number(userData.credits) || 0) - cost);
+
+          dispatch(
+            setUserData({
+              ...userData,
+              credits: updatedCredits,
+            }),
+          );
+        }
       }
     } catch (error) {
       console.error("Failed to send message:", error);

@@ -46,7 +46,7 @@ const PLAN_UI_META = {
     icon: Zap,
     description: "Essential AI chat and everyday productivity tools.",
     features: [
-      "100 AI Coins for 30 days",
+      "100 AI Credits for 30 days",
       "Standard Chat & Web Search",
       "Basic Code Generation",
       "Standard PDF & PPT exports",
@@ -59,7 +59,7 @@ const PLAN_UI_META = {
     highlighted: true,
     description: "Built for creators, students, and daily builders.",
     features: [
-      "500 AI Coins for 30 days",
+      "500 AI Credits for 30 days",
       "Full Coding Agent & Live Preview",
       "HD Vision Image Generation",
       "Unlimited PDF & PPT Deck Exports",
@@ -72,7 +72,7 @@ const PLAN_UI_META = {
     icon: Crown,
     description: "Maximum throughput for power users and heavy workflows.",
     features: [
-      "1,000 AI Coins for 30 days",
+      "1,000 AI Credits for 30 days",
       "Fastest Gemini & Groq priority lane",
       "Multi-file Project & UI Artifacts",
       "High-speed Vision Renders & S3 CDN",
@@ -81,6 +81,15 @@ const PLAN_UI_META = {
     cta: "Upgrade to Pro",
   },
 };
+
+const AGENT_COSTS = [
+  { label: "Chat", cost: 1 },
+  { label: "Search", cost: 5 },
+  { label: "Coding", cost: 10 },
+  { label: "PDF", cost: 10 },
+  { label: "Vision", cost: 10 },
+  { label: "PPT", cost: 10 },
+];
 
 const PLAN_LIST = Object.values(PLANS).map((plan) => ({
   ...plan,
@@ -94,12 +103,28 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
   const [processingPlan, setProcessingPlan] = useState(null);
 
   const currentPlanId = String(userData?.plan || "free").toLowerCase();
-  const currentCoins =
-    typeof userData?.coins === "number"
-      ? userData.coins
-      : typeof userData?.credits === "number"
-        ? userData.credits
-        : PLANS.free.credits;
+  const availableCredits =
+    typeof userData?.credits === "number"
+      ? userData.credits
+      : PLANS[currentPlanId]?.credits ?? PLANS.free.credits;
+
+  const totalCredits =
+    typeof userData?.totalCredits === "number" && userData.totalCredits > 0
+      ? Math.max(userData.totalCredits, availableCredits)
+      : Math.max(PLANS[currentPlanId]?.credits ?? 100, availableCredits);
+
+  const creditPercentage = Math.min(
+    100,
+    Math.max(0, Math.round((availableCredits / totalCredits) * 100))
+  );
+
+  const formattedExpiry = userData?.planExpiresAt
+    ? new Date(userData.planExpiresAt).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "30 Days Validity";
 
   useEffect(() => {
     if (!isOpen) return;
@@ -164,14 +189,12 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
               data?.credits ?? resolvedPlan.credits ?? plan.credits
             );
 
-            // Use full updated user from backend if returned, otherwise merge optimistically
             const updatedUser = data?.user
               ? { ...userData, ...data.user }
               : {
                   ...userData,
                   plan: data?.plan || resolvedPlan.id || plan.id,
                   credits: (Number(userData?.credits) || 0) + addedCredits,
-                  coins: (Number(userData?.coins) || 0) + addedCredits,
                   totalCredits:
                     (Number(userData?.totalCredits) || 0) + addedCredits,
                   planExpiresAt: new Date(
@@ -186,7 +209,7 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
             }
 
             showToast(
-              `${resolvedPlan.name} Plan activated! +${addedCredits} Coins added.`,
+              `${resolvedPlan.name} Plan activated! +${addedCredits} Credits added.`,
               "success"
             );
             onClose?.();
@@ -265,10 +288,10 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
                 </motion.div>
                 <div>
                   <h2 className="text-base font-semibold text-white tracking-tight">
-                    Plans &amp; Coins
+                    Plans &amp; Credits
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    Choose a 30-day coin pack to power your NovaAI agents
+                    Choose a 30-day credit pack to power your NovaAI agents
                   </p>
                 </div>
               </div>
@@ -287,35 +310,71 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 scrollbar-none">
-              {/* Current Balance Banner */}
+              {/* Current Balance & Credit Usage Card */}
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.08, duration: 0.28, ease: "easeOut" }}
-                className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800"
+                className="p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-black border border-zinc-800 flex items-center justify-center text-white shrink-0">
-                    <Coins size={18} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold">
-                        Available Balance
-                      </span>
-                      <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700">
-                        {currentPlanId} Plan
-                      </span>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-black border border-zinc-800 flex items-center justify-center text-white shrink-0">
+                      <Coins size={18} />
                     </div>
-                    <p className="text-lg font-bold text-white mt-0.5">
-                      {currentCoins.toLocaleString()} Coins
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold">
+                          Available Credits
+                        </span>
+                        <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-200 border border-zinc-700">
+                          {currentPlanId} Plan
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-0.5">
+                        <p className="text-xl font-bold text-white">
+                          {availableCredits.toLocaleString()}
+                        </p>
+                        <span className="text-xs text-zinc-500">
+                          / {totalCredits.toLocaleString()} Credits
+                        </span>
+                      </div>
+                    </div>
                   </div>
+
+                  <span className="text-[11px] font-medium text-zinc-400 bg-black border border-zinc-800 px-3 py-1.5 rounded-xl shrink-0">
+                    {userData?.planExpiresAt
+                      ? `Expires ${formattedExpiry}`
+                      : "30 Days Validity"}
+                  </span>
                 </div>
 
-                <span className="text-[11px] font-medium text-zinc-400 bg-black border border-zinc-800 px-3 py-1.5 rounded-xl shrink-0">
-                  30 Days Validity
-                </span>
+                {/* Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="w-full h-2 rounded-full bg-black border border-zinc-800 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${creditPercentage}%` }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                      className={`h-full rounded-full ${
+                        availableCredits <= 10 ? "bg-zinc-400" : "bg-white"
+                      }`}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">
+                    <span>{creditPercentage}% remaining</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {AGENT_COSTS.map((item) => (
+                        <span
+                          key={item.label}
+                          className="px-1.5 py-0.5 rounded bg-black/80 border border-zinc-800/80 text-zinc-400"
+                        >
+                          {item.label}: {item.cost}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </motion.div>
 
               {/* 3-Tier Plan Cards */}
@@ -378,7 +437,7 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
                             </span>
                           </div>
                           <p className="text-[11px] text-zinc-300 mt-1 font-medium">
-                            {plan.credits.toLocaleString()} Coins •{" "}
+                            {plan.credits.toLocaleString()} Credits •{" "}
                             {plan.validity} Days Validity
                           </p>
                         </div>
@@ -438,7 +497,7 @@ const BillingDrawer = ({ isOpen, onClose, onPaymentSuccess }) => {
             <div className="px-5 sm:px-6 py-3.5 border-t border-zinc-800 bg-black/60 flex items-center justify-between text-[11px] text-zinc-500 shrink-0">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck size={14} className="text-zinc-400" />
-                <span>Secured by Razorpay. Instant 30-day coin top-up.</span>
+                <span>Secured by Razorpay. Instant 30-day credit top-up.</span>
               </div>
               <span>NovaAI Billing</span>
             </div>

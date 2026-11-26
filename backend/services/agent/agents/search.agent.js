@@ -1,4 +1,5 @@
 import { searchTool } from "../config/tavily.js";
+import { deductCredits } from "../utils/deductCredits.js";
 
 export const searchAgent = async (state) => {
   try {
@@ -12,8 +13,8 @@ export const searchAgent = async (state) => {
         ? response
         : [];
 
+    await deductCredits(state.userId, "search");
     const images = Array.isArray(response?.images) ? response.images : [];
-
     return {
       ...state,
       searchResults: results,

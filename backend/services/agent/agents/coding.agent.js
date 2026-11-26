@@ -1,5 +1,6 @@
 import { getModel } from "../models/LLMmodels.js";
 import { resolveUnsplashPlaceholders } from "../config/unsplash.js";
+import { deductCredits } from "../utils/deductCredits.js";
 
 const parseProjectFiles = (rawText = "") => {
   const files = [];
@@ -24,7 +25,9 @@ const parseProjectFiles = (rawText = "") => {
     try {
       const parsed = JSON.parse(jsonMatch[0]);
       if (Array.isArray(parsed?.files) && parsed.files.length > 0) {
-        return parsed.files.filter((f) => f?.name && typeof f?.content === "string");
+        return parsed.files.filter(
+          (f) => f?.name && typeof f?.content === "string",
+        );
       }
     } catch (err) {
       console.error("Fallback JSON parse failed in codingAgent:", err.message);
@@ -64,7 +67,9 @@ Return ONLY the label name with no punctuation or extra text.
 User Request: ${state.prompt}
     `);
 
-    intent = String(intentRes.content || "").trim().toUpperCase();
+    intent = String(intentRes.content || "")
+      .trim()
+      .toUpperCase();
     isCodeGeneration =
       intent.includes("CODE_GENERATION") || intent.includes("CODE GENERATION");
   }
@@ -120,10 +125,10 @@ User Request: ${state.prompt}
     const res = await llm.invoke(prompt);
     const rawText = String(res.content || "").trim();
     const parsedFiles = parseProjectFiles(rawText);
-
     if (parsedFiles.length > 0) {
       const hydratedFiles = await resolveUnsplashPlaceholders(parsedFiles);
 
+      await deductCredits(state.userId, "coding");
       return {
         ...state,
         aiResponse: "Code Generated Successfully.",
@@ -155,6 +160,8 @@ Use headings like:
 User Request:
 ${state.prompt}
   `);
+
+  await deductCredits(state.userId, "coding");
 
   return {
     ...state,

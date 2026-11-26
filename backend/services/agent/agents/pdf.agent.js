@@ -1,4 +1,5 @@
 import { getModel } from "../models/LLMmodels.js";
+import { deductCredits } from "../utils/deductCredits.js";
 import { generatePDF } from "../utils/generatePDF.js";
 import { getFromS3 } from "../utils/getFromS3.js";
 import { uploadToS3 } from "../utils/uploadToS3.js";
@@ -152,6 +153,8 @@ User Request: ${userTopic}
     const sectionOutline = data.sections
       .map((sec, idx) => `${idx + 1}. ${sec.heading}`)
       .join("\n");
+
+    await deductCredits(state.userId, "pdf");
 
     return {
       ...state,

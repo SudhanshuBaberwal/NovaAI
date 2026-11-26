@@ -25,6 +25,7 @@ export const agent = async (req, res) => {
     }
 
     const { prompt, conversationId, agent } = req.body;
+    const userId = req.headers["x-user-id"] || req.body?.userId;
 
     if (!prompt?.trim()) {
       return res.status(400).json({
@@ -56,6 +57,7 @@ export const agent = async (req, res) => {
         prompt: cleanPrompt,
         conversationId,
         agent,
+        userId,
       });
     } catch (graphError) {
       const isRateLimit =
@@ -117,11 +119,18 @@ export const agent = async (req, res) => {
       artifacts: normalizedArtifacts,
     });
 
+    // 5. Fetch/forward remaining credits if your graph nodes deducted credits
+    const remainingCredits =
+      typeof result?.credits === "number" ? result.credits : undefined;
+
     return res.status(200).json({
       success: true,
       answer: response,
       images: normalizedImages,
       artifacts: normalizedArtifacts,
+      ...(typeof remainingCredits === "number"
+        ? { credits: remainingCredits }
+        : {}),
     });
   } catch (error) {
     console.error(

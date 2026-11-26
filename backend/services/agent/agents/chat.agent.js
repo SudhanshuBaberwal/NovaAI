@@ -5,6 +5,7 @@ import {
   HumanMessage,
   SystemMessage,
 } from "@langchain/core/messages";
+import { deductCredits } from "../utils/deductCredits.js";
 
 const MAX_HISTORY_MESSAGES = 24;
 const MAX_SNIPPET_LENGTH = 1500;
@@ -152,6 +153,8 @@ Coding Guidelines:
     const aiResponse =
       extractTextContent(result?.content) ||
       "I couldn't generate a response for that request. Please try rephrasing.";
+
+    await deductCredits(state.userId, "chat");
 
     return {
       ...state,
