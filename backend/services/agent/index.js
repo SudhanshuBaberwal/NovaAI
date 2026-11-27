@@ -7,6 +7,12 @@ const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use((err,req,res,next) => {
+  if (err.status){
+    return res.status(status).json(err.data)
+  }
+  return res.status(500).json({message:`agent errror : ${error}`})
+})
 
 const port = process.env.PORT;
 app.use("/", router);

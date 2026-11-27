@@ -1,3 +1,4 @@
+import { checkAgentLimit } from "../config/agentLimit.js";
 import { getModel } from "../models/LLMmodels.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { generatePpt } from "../utils/generatePpt.js";
@@ -81,6 +82,7 @@ const parseAndNormalizeDeck = (rawText, fallbackTopic) => {
 };
 
 export const pptAgent = async (state) => {
+  await checkAgentLimit(state.userId,"ppt")
   const userTopic = String(state?.prompt || "").trim();
 
   if (!userTopic) {

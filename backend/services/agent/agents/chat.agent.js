@@ -6,6 +6,7 @@ import {
   SystemMessage,
 } from "@langchain/core/messages";
 import { deductCredits } from "../utils/deductCredits.js";
+import { checkAgentLimit } from "../config/agentLimit.js";
 
 const MAX_HISTORY_MESSAGES = 24;
 const MAX_SNIPPET_LENGTH = 1500;
@@ -79,7 +80,7 @@ const formatSearchResults = (searchResults = []) => {
 export const chatAgent = async (state) => {
   const userPrompt = String(state?.prompt || "").trim();
   const existingImages = Array.isArray(state?.images) ? state.images : [];
-
+  await checkAgentLimit(state.userId,"chat")
   try {
     const llm = await getModel("chat");
 

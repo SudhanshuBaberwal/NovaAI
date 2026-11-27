@@ -1,3 +1,4 @@
+import { checkAgentLimit } from "../config/agentLimit.js";
 import { getModel } from "../models/LLMmodels.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { generatePDF } from "../utils/generatePDF.js";
@@ -85,6 +86,7 @@ const parseAndNormalizeDocument = (rawText, fallbackTopic) => {
 };
 
 export const pdfAgent = async (state) => {
+  await checkAgentLimit(state.userId,"pdf")
   const userTopic = String(state?.prompt || "").trim();
 
   if (!userTopic) {

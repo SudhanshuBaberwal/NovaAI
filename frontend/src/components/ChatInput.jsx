@@ -12,7 +12,9 @@ import {
   ImageIcon,
   Globe2,
   X,
+  Loader2,
 } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import { useSelector, useDispatch } from "react-redux";
 import sendMessage from "../features/sendMessage";
 import { addMessages, setArtifacts } from "../redux/messageSlice";
@@ -25,6 +27,7 @@ import { setUserData } from "../redux/userSlice";
 import { createConversation } from "../features/createConversations";
 import updateConversation from "../features/updateConversation";
 import { useToast } from "../utils/ToastContext";
+import LoadingAnimation from "./LoadingAnimation";
 
 const AGENT_CREDIT_COST = {
   auto: 1,
@@ -49,11 +52,7 @@ const extractFallbackArtifacts = (markdownText, promptTitle) => {
   const files = matches.map((m, idx) => {
     const lang = (m[1] || "html").toLowerCase();
     const ext =
-      lang === "javascript"
-        ? "js"
-        : lang === "typescript"
-          ? "ts"
-          : lang || "txt";
+      lang === "javascript" ? "js" : lang === "typescript" ? "ts" : lang || "txt";
     const defaultName =
       ext === "html"
         ? "index.html"
@@ -82,6 +81,7 @@ const extractFallbackArtifacts = (markdownText, promptTitle) => {
 const ChatInput = () => {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState([]);
+  const [sendingHasFiles, setSendingHasFiles] = useState(false);
   const [isWebSearch, setIsWebSearch] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("auto");
@@ -101,7 +101,6 @@ const ChatInput = () => {
     }
   }, [input]);
 
-  // Revoke object URLs on unmount
   useEffect(() => {
     return () => {
       attachments.forEach((item) => {
@@ -192,7 +191,6 @@ const ChatInput = () => {
       setAttachments((prev) => [...prev, ...validItems]);
     }
 
-    // Reset input so selecting the same file again still triggers onChange
     e.target.value = "";
   };
 
@@ -210,6 +208,7 @@ const ChatInput = () => {
     const hasFiles = attachments.length > 0;
     if ((!message && !hasFiles) || isSending) return;
 
+    setSendingHasFiles(hasFiles);
     setIsSending(true);
     try {
       let conversation = selectedConversation;
@@ -264,6 +263,8 @@ const ChatInput = () => {
           console.error("Failed to update title:", titleErr);
         }
       }
+
+      // 4. Send FormData
       const normalizedAgent = selectedAgent.toLowerCase();
       const formData = new FormData();
       formData.append("prompt", effectivePrompt);
@@ -325,6 +326,7 @@ const ChatInput = () => {
       );
     } finally {
       setIsSending(false);
+      setSendingHasFiles(false);
     }
   };
 
@@ -344,6 +346,16 @@ const ChatInput = () => {
     <div
       className={`w-full ${containerWidth} mx-auto px-4 sm:px-6 pb-4 pt-2 shrink-0`}
     >
+      {/* Active Query Loading Animation */}
+      <AnimatePresence>
+        {isSending && (
+          <LoadingAnimation
+            agent={selectedAgent}
+            hasAttachments={sendingHasFiles}
+          />
+        )}
+      </AnimatePresence>
+
       <form
         onSubmit={handleSubmit}
         className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl p-2.5 focus-within:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-700 transition-all shadow-xl"
@@ -368,12 +380,13 @@ const ChatInput = () => {
               <button
                 key={agent.id}
                 type="button"
+                disabled={isSending}
                 onClick={() => handleSelectAgent(agent.id)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-all duration-150 cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-all duration-150 ${
                   isActive
                     ? "bg-white text-black font-semibold border-white"
                     : "bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white hover:bg-zinc-800 hover:border-zinc-700"
-                }`}
+                } ${isSending ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <Icon size={13} strokeWidth={isActive ? 2.4 : 2} />
                 <span>{agent.label}</span>
@@ -421,7 +434,9 @@ const ChatInput = () => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={activeAgent.placeholder}
+          placeholder={
+            isSending ? "Generating response..." : activeAgent.placeholder
+          }
           rows={1}
           className="w-full bg-transparent text-white placeholder-zinc-500 text-sm resize-none focus:outline-none px-2 py-1 max-h-44 scrollbar-none"
         />
@@ -431,20 +446,22 @@ const ChatInput = () => {
           <div className="flex items-center gap-1">
             <button
               type="button"
+              disabled={isSending}
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               title="Attach Image or PDF"
             >
               <Paperclip size={18} />
             </button>
             <button
               type="button"
+              disabled={isSending}
               onClick={() =>
                 handleSelectAgent(
                   selectedAgent === "search" ? "auto" : "search",
                 )
               }
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                 isWebSearch || selectedAgent === "search"
                   ? "bg-zinc-100 text-black font-semibold"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800"
@@ -459,7 +476,8 @@ const ChatInput = () => {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              disabled={isSending}
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               title="Voice Input"
             >
               <Mic size={18} />
@@ -470,11 +488,17 @@ const ChatInput = () => {
               className={`p-2 rounded-xl transition-all duration-150 ${
                 canSubmit
                   ? "bg-white text-black hover:bg-zinc-200 cursor-pointer active:scale-95"
-                  : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                  : isSending
+                    ? "bg-zinc-800 text-white cursor-wait"
+                    : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
               }`}
-              title="Send Message"
+              title={isSending ? "Generating..." : "Send Message"}
             >
-              <ArrowUp size={18} strokeWidth={2.5} />
+              {isSending ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <ArrowUp size={18} strokeWidth={2.5} />
+              )}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { getModel } from "../models/LLMmodels.js";
 import { resolveUnsplashPlaceholders } from "../config/unsplash.js";
 import { deductCredits } from "../utils/deductCredits.js";
+import { checkAgentLimit } from "../config/agentLimit.js";
 
 const parseProjectFiles = (rawText = "") => {
   const files = [];
@@ -47,6 +48,7 @@ const isFrontendOrProjectPrompt = (prompt = "") => {
 };
 
 export const codingAgent = async (state) => {
+  await checkAgentLimit(state.userId,"coding")
   const intentLLM = await getModel("intent");
   const llm = await getModel("coding");
 

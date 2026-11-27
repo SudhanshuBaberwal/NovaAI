@@ -2,9 +2,11 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getModel } from "../models/LLMmodels.js";
 import fs from "fs/promises";
 import { deductCredits } from "../utils/deductCredits.js";
+import { checkAgentLimit } from "../config/agentLimit.js";
 
 export const imageAnalyzer = async (state) => {
   try {
+    await checkAgentLimit(state.userId,"image")
     const llm = await getModel("imageAnalyzer");
     const imageBuffer = await fs.readFile(state.file.path);
     const base64Image = imageBuffer.toString("base64");

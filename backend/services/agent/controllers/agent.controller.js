@@ -15,7 +15,7 @@ const normalizeImages = (images) => {
     .filter(Boolean);
 };
 
-export const agent = async (req, res) => {
+export const agent = async (req, res, next) => {
   try {
     if (!req.body || typeof req.body !== "object") {
       return res.status(400).json({
@@ -146,10 +146,10 @@ export const agent = async (req, res) => {
       "Error in agent API:",
       error?.response?.data || error.message || error,
     );
-
-    return res.status(500).json({
-      success: false,
-      message: error?.response?.data?.message || error.message,
-    });
+    next(error);
+    // return res.status(500).json({
+    //   success: false,
+    //   message: error?.response?.data?.message || error.message,
+    // });
   }
 };
