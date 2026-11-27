@@ -18,6 +18,12 @@ const ChatArea = ({ isMobileOpen, setIsMobileOpen }) => {
         return;
       }
 
+      // Skip fetching from DB when a new conversation was just created in ChatInput
+      // so optimistic user/assistant messages aren't wiped out before DB save completes
+      if (selectedConversation?.isNew) {
+        return;
+      }
+
       try {
         const data = await getMessages(selectedConversation._id);
         const list = Array.isArray(data)
@@ -33,7 +39,7 @@ const ChatArea = ({ isMobileOpen, setIsMobileOpen }) => {
         const latestArtifactsMessage = [...list]
           .reverse()
           .find(
-            (msg) => Array.isArray(msg?.artifacts) && msg.artifacts.length > 0
+            (msg) => Array.isArray(msg?.artifacts) && msg.artifacts.length > 0,
           );
 
         dispatch(setArtifacts(latestArtifactsMessage?.artifacts || []));
@@ -45,7 +51,7 @@ const ChatArea = ({ isMobileOpen, setIsMobileOpen }) => {
     };
 
     fetchMessages();
-  }, [selectedConversation?._id, dispatch]);
+  }, [selectedConversation?._id, selectedConversation?.isNew, dispatch]);
 
   return (
     <div className="flex-1 w-full flex flex-col h-screen h-dvh bg-black text-zinc-100 min-w-0 overflow-hidden relative">

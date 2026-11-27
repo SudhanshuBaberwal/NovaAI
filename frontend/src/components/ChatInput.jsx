@@ -52,7 +52,11 @@ const extractFallbackArtifacts = (markdownText, promptTitle) => {
   const files = matches.map((m, idx) => {
     const lang = (m[1] || "html").toLowerCase();
     const ext =
-      lang === "javascript" ? "js" : lang === "typescript" ? "ts" : lang || "txt";
+      lang === "javascript"
+        ? "js"
+        : lang === "typescript"
+          ? "ts"
+          : lang || "txt";
     const defaultName =
       ext === "html"
         ? "index.html"
@@ -100,14 +104,6 @@ const ChatInput = () => {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
     }
   }, [input]);
-
-  useEffect(() => {
-    return () => {
-      attachments.forEach((item) => {
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      });
-    };
-  }, [attachments]);
 
   const agents = [
     {
@@ -210,19 +206,22 @@ const ChatInput = () => {
 
     setSendingHasFiles(hasFiles);
     setIsSending(true);
+
     try {
       let conversation = selectedConversation;
+      let isNewlyCreated = Boolean(conversation?.isNew);
 
       // 1. Create & select a new conversation if none is active
       if (!conversation?._id) {
         const conv = await createConversation();
         if (!conv?._id) {
-          console.error("Failed to create conversation.");
+          showToast?.("Failed to create conversation.", "error");
           return;
         }
+        isNewlyCreated = true;
+        conversation = { ...conv, isNew: true };
         dispatch(addConversation(conv));
-        dispatch(setSelectedConversation(conv));
-        conversation = conv;
+        dispatch(setSelectedConversation(conversation));
       }
 
       const conversationId = conversation._id;
@@ -250,14 +249,18 @@ const ChatInput = () => {
         textareaRef.current.style.height = "auto";
       }
 
-      // 3. Rename "New Chat" using the first message
+      // 3. Rename "New Chat" using the first message while preserving isNew flag
       if (conversation.title === "New Chat") {
         const newTitle = effectivePrompt.slice(0, 40);
         try {
           await updateConversation({ id: conversationId, title: newTitle });
           dispatch(setConvTitle({ conversationId, title: newTitle }));
           dispatch(
-            setSelectedConversation({ ...conversation, title: newTitle }),
+            setSelectedConversation({
+              ...conversation,
+              title: newTitle,
+              isNew: isNewlyCreated,
+            }),
           );
         } catch (titleErr) {
           console.error("Failed to update title:", titleErr);

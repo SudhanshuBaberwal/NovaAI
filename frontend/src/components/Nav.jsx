@@ -73,12 +73,12 @@ const Nav = ({ setIsMobileOpen }) => {
 
       {/* Right side Actions */}
       <div className="flex items-center gap-1">
-        <button
+        {/* <button
           className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
           title="Share Chat"
         >
           <Share2 size={18} />
-        </button>
+        </button> */}
         <button
           className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
           title="Settings"
