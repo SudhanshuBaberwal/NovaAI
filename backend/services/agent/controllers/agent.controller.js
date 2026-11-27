@@ -26,6 +26,13 @@ export const agent = async (req, res) => {
 
     const { prompt, conversationId, agent } = req.body;
     const userId = req.headers["x-user-id"] || req.body?.userId;
+    const file = Array.isArray(req.files)
+      ? req.files
+      : [
+          ...(req.files?.files || []),
+          ...(req.files?.file || []),
+          ...(req.file ? [req.file] : []),
+        ];
 
     if (!prompt?.trim()) {
       return res.status(400).json({
@@ -58,6 +65,7 @@ export const agent = async (req, res) => {
         conversationId,
         agent,
         userId,
+        file,
       });
     } catch (graphError) {
       const isRateLimit =
@@ -128,6 +136,7 @@ export const agent = async (req, res) => {
       answer: response,
       images: normalizedImages,
       artifacts: normalizedArtifacts,
+      agent: result?.agent || agent,
       ...(typeof remainingCredits === "number"
         ? { credits: remainingCredits }
         : {}),
@@ -135,7 +144,7 @@ export const agent = async (req, res) => {
   } catch (error) {
     console.error(
       "Error in agent API:",
-      error?.response?.data || error.message || error
+      error?.response?.data || error.message || error,
     );
 
     return res.status(500).json({

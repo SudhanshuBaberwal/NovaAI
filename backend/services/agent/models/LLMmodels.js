@@ -81,7 +81,7 @@ const getCodingModel = () => {
           temperature: 0,
           maxTokens: 6000,
           maxRetries: 1,
-        })
+        }),
       );
     }
 
@@ -115,6 +115,7 @@ export const getModel = async (agent) => {
     case "gemini":
     case "pdf":
     case "ppt":
+    case "imageAnalyzer":
       return getGeminiModel();
 
     default:

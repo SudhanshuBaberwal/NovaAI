@@ -15,4 +15,5 @@ export const agentState = Annotation.Root({
     reducer: (_, next) => next ?? [],
     default: () => [],
   }),
+  file:Annotation()
 });

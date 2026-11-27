@@ -11,6 +11,7 @@ import {
   Presentation,
   ImageIcon,
   Globe2,
+  X,
 } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import sendMessage from "../features/sendMessage";
@@ -23,6 +24,7 @@ import {
 import { setUserData } from "../redux/userSlice";
 import { createConversation } from "../features/createConversations";
 import updateConversation from "../features/updateConversation";
+import { useToast } from "../utils/ToastContext";
 
 const AGENT_CREDIT_COST = {
   auto: 1,
@@ -34,6 +36,11 @@ const AGENT_CREDIT_COST = {
   ppt: 10,
 };
 
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+const isAllowedFile = (file) =>
+  file && (file.type === "application/pdf" || file.type.startsWith("image/"));
+
 const extractFallbackArtifacts = (markdownText, promptTitle) => {
   const codeBlockRegex = /```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/g;
   const matches = [...String(markdownText || "").matchAll(codeBlockRegex)];
@@ -42,7 +49,11 @@ const extractFallbackArtifacts = (markdownText, promptTitle) => {
   const files = matches.map((m, idx) => {
     const lang = (m[1] || "html").toLowerCase();
     const ext =
-      lang === "javascript" ? "js" : lang === "typescript" ? "ts" : lang || "txt";
+      lang === "javascript"
+        ? "js"
+        : lang === "typescript"
+          ? "ts"
+          : lang || "txt";
     const defaultName =
       ext === "html"
         ? "index.html"
@@ -70,11 +81,14 @@ const extractFallbackArtifacts = (markdownText, promptTitle) => {
 
 const ChatInput = () => {
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState([]);
   const [isWebSearch, setIsWebSearch] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("auto");
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const dispatch = useDispatch();
+  const { showToast } = useToast();
 
   const { selectedConversation } = useSelector((state) => state.conversation);
   const { userData } = useSelector((state) => state.user);
@@ -86,6 +100,15 @@ const ChatInput = () => {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
     }
   }, [input]);
+
+  // Revoke object URLs on unmount
+  useEffect(() => {
+    return () => {
+      attachments.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+    };
+  }, [attachments]);
 
   const agents = [
     {
@@ -140,10 +163,52 @@ const ChatInput = () => {
     setIsWebSearch(agentId === "search");
   };
 
+  const handleFileChange = (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const validItems = [];
+    for (const file of selectedFiles) {
+      if (!isAllowedFile(file)) {
+        showToast?.("Only PDF and Image files are allowed.", "error");
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        showToast?.(`${file.name} exceeds the 20MB limit.`, "error");
+        continue;
+      }
+
+      const isImage = file.type.startsWith("image/");
+      validItems.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        name: file.name,
+        isImage,
+        previewUrl: isImage ? URL.createObjectURL(file) : null,
+      });
+    }
+
+    if (validItems.length > 0) {
+      setAttachments((prev) => [...prev, ...validItems]);
+    }
+
+    // Reset input so selecting the same file again still triggers onChange
+    e.target.value = "";
+  };
+
+  const handleRemoveAttachment = (id) => {
+    setAttachments((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((item) => item.id !== id);
+    });
+  };
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     const message = input.trim();
-    if (!message || isSending) return;
+    const hasFiles = attachments.length > 0;
+    if ((!message && !hasFiles) || isSending) return;
 
     setIsSending(true);
     try {
@@ -162,17 +227,33 @@ const ChatInput = () => {
       }
 
       const conversationId = conversation._id;
+      const effectivePrompt =
+        message ||
+        `Analyze the attached ${attachments.map((a) => a.name).join(", ")}`;
 
-      // 2. Optimistically append user message & clear input immediately
-      dispatch(addMessages({ role: "user", content: message }));
+      const optimisticImages = attachments
+        .filter((a) => a.isImage && a.previewUrl)
+        .map((a) => a.previewUrl);
+
+      const currentAttachments = [...attachments];
+
+      // 2. Optimistically append user message & clear input/attachments immediately
+      dispatch(
+        addMessages({
+          role: "user",
+          content: effectivePrompt,
+          images: optimisticImages,
+        }),
+      );
       setInput("");
+      setAttachments([]);
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
 
       // 3. Rename "New Chat" using the first message
       if (conversation.title === "New Chat") {
-        const newTitle = message.slice(0, 40);
+        const newTitle = effectivePrompt.slice(0, 40);
         try {
           await updateConversation({ id: conversationId, title: newTitle });
           dispatch(setConvTitle({ conversationId, title: newTitle }));
@@ -183,14 +264,17 @@ const ChatInput = () => {
           console.error("Failed to update title:", titleErr);
         }
       }
-
-      // 4. Send message & selected agent to backend
       const normalizedAgent = selectedAgent.toLowerCase();
-      const data = await sendMessage({
-        prompt: message,
-        conversationId,
-        agent: normalizedAgent,
+      const formData = new FormData();
+      formData.append("prompt", effectivePrompt);
+      formData.append("conversationId", conversationId);
+      formData.append("agent", normalizedAgent);
+
+      currentAttachments.forEach((item) => {
+        formData.append("files", item.file);
       });
+
+      const data = await sendMessage(formData);
 
       const aiReply =
         data?.response || data?.answer || data?.message || data?.data;
@@ -200,11 +284,11 @@ const ChatInput = () => {
           ? data.artifacts
           : [];
 
-        if (
-          incomingArtifacts.length === 0 &&
-          normalizedAgent === "coding"
-        ) {
-          incomingArtifacts = extractFallbackArtifacts(aiReply, message);
+        if (incomingArtifacts.length === 0 && normalizedAgent === "coding") {
+          incomingArtifacts = extractFallbackArtifacts(
+            aiReply,
+            effectivePrompt,
+          );
         }
 
         dispatch(setArtifacts(incomingArtifacts));
@@ -219,8 +303,7 @@ const ChatInput = () => {
 
         // 5. Sync remaining credits in Redux immediately
         if (userData) {
-          const cost =
-            AGENT_CREDIT_COST[data?.agent || normalizedAgent] ?? 1;
+          const cost = AGENT_CREDIT_COST[data?.agent || normalizedAgent] ?? 1;
           const updatedCredits =
             typeof data?.credits === "number"
               ? data.credits
@@ -236,6 +319,10 @@ const ChatInput = () => {
       }
     } catch (error) {
       console.error("Failed to send message:", error);
+      showToast?.(
+        error?.response?.data?.message || "Failed to send message.",
+        "error",
+      );
     } finally {
       setIsSending(false);
     }
@@ -250,6 +337,8 @@ const ChatInput = () => {
 
   const hasOpenArtifact = Array.isArray(artifacts) && artifacts.length > 0;
   const containerWidth = hasOpenArtifact ? "max-w-3xl" : "max-w-4xl";
+  const canSubmit =
+    (input.trim().length > 0 || attachments.length > 0) && !isSending;
 
   return (
     <div
@@ -259,6 +348,16 @@ const ChatInput = () => {
         onSubmit={handleSubmit}
         className="relative bg-zinc-900/90 border border-zinc-800 rounded-2xl p-2.5 focus-within:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-700 transition-all shadow-xl"
       >
+        {/* Hidden File Input (Images & PDFs only) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,image/*"
+          multiple
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
         {/* Agent Selector Pills */}
         <div className="flex items-center gap-1.5 flex-wrap pb-2.5 mb-1.5 border-b border-zinc-800/80">
           {agents.map((agent) => {
@@ -283,6 +382,39 @@ const ChatInput = () => {
           })}
         </div>
 
+        {/* Selected Attachments Preview */}
+        {attachments.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap px-2 py-2 mb-1.5">
+            {attachments.map((item) => (
+              <div
+                key={item.id}
+                className="relative group flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-zinc-200 max-w-[200px]"
+              >
+                {item.isImage && item.previewUrl ? (
+                  <img
+                    src={item.previewUrl}
+                    alt={item.name}
+                    className="w-7 h-7 rounded-md object-cover border border-zinc-700 shrink-0"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
+                    <FileText size={14} />
+                  </div>
+                )}
+                <span className="truncate">{item.name}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAttachment(item.id)}
+                  className="p-0.5 rounded-full bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors cursor-pointer shrink-0"
+                  title="Remove attachment"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Prompt Textarea */}
         <textarea
           ref={textareaRef}
@@ -299,8 +431,9 @@ const ChatInput = () => {
           <div className="flex items-center gap-1">
             <button
               type="button"
+              onClick={() => fileInputRef.current?.click()}
               className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-              title="Attach File"
+              title="Attach Image or PDF"
             >
               <Paperclip size={18} />
             </button>
@@ -333,9 +466,9 @@ const ChatInput = () => {
             </button>
             <button
               type="submit"
-              disabled={!input.trim() || isSending}
+              disabled={!canSubmit}
               className={`p-2 rounded-xl transition-all duration-150 ${
-                input.trim() && !isSending
+                canSubmit
                   ? "bg-white text-black hover:bg-zinc-200 cursor-pointer active:scale-95"
                   : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
               }`}

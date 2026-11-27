@@ -1,13 +1,15 @@
-import React from "react";
 import api from "../../utils/axios";
 
-const sendMessage = async (payload) => {
+const sendMessage = async (formData) => {
   try {
-    const { data } = await api.post("/api/agent/chat", payload);
+    const isFormData = formData instanceof FormData;
+    const { data } = await api.post("/api/agent/chat", formData, {
+      headers: isFormData ? { "Content-Type": "multipart/form-data" } : undefined,
+    });
     return data;
   } catch (error) {
-    console.log(error);
-    return null;
+    console.error("Send message error:", error);
+    throw error;
   }
 };
 

@@ -17,6 +17,32 @@ export const router = async (state) => {
     .trim()
     .toLowerCase();
 
+  // Handle both array (from req.files) and single Multer file object
+  const files = Array.isArray(state.file)
+    ? state.file
+    : state.file
+      ? [state.file]
+      : [];
+  const primaryFile = files[0];
+
+  if (primaryFile?.mimetype === "application/pdf") {
+    return {
+      ...state,
+      file: primaryFile,
+      files,
+      agent: "pdfRag",
+    };
+  }
+
+  if (primaryFile?.mimetype?.startsWith("image/")) {
+    return {
+      ...state,
+      file: primaryFile,
+      files,
+      agent: "imageAnalyzer",
+    };
+  }
+
   // Map frontend "image" pill to graph's "vision" node
   if (requestedAgent === "image") {
     return {
